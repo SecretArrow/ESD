@@ -155,6 +155,14 @@ void Logger::writeToFile(LogCategory cat, LogLevel level, const QString& msg)
     m_file.flush();
 }
 
+QString Logger::logFilePath() const
+{
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    if (m_file.isOpen())
+        return m_file.fileName();
+    return utils::dataDirectory() + QStringLiteral("/logs/eclipse-ssh.log");
+}
+
 QString Logger::exportLogs(const QString& path)
 {
     const auto entries = m_uiModel->entriesForExport();

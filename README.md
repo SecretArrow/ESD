@@ -74,6 +74,31 @@ The application itself carries proper Windows metadata (product name, version,
 publisher, icon) embedded at build time, so it is identified correctly in Explorer,
 the taskbar and the installed-apps list.
 
+## Troubleshooting (Windows)
+
+**The window never appears** — launch with live diagnostics from PowerShell:
+
+```powershell
+$env:ECLIPSE_LOG_STDERR = "1"
+.\eclipse-ssh-desktop.exe
+```
+
+Startup messages and any QML errors now stream straight into the terminal (the app
+attaches itself to the console it was launched from). The log file is at
+`%APPDATA%\EclipseSSH\Eclipse SSH Desktop\logs\eclipse-ssh.log`; if the UI itself
+fails to load, a native dialog shows the exact errors instead of exiting silently.
+
+**Launching it again does nothing** — that is the single-instance guard working:
+the second launch signals the first one to raise and focus its window, then quits.
+On Windows the guard is an OS mutex owned by the running process, so a crashed or
+killed instance can never block the next start (releases before 0.2.3 used a lock
+file that could go stale after a crash and silently refuse to start — deleting
+`...\AppData\Local\EclipseSSH\Eclipse SSH Desktop\cache\single-instance.lock` was
+the workaround; it is no longer needed).
+
+`--help` and `--version` print to the terminal when launched from PowerShell or
+cmd, and when stdout is redirected the output is captured normally.
+
 ## Repository layout
 
 ```

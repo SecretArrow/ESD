@@ -75,6 +75,11 @@ ApplicationWindow {
     Connections {
         target: App
         function onCommandRequested(id) { root.runCommand(id); }
+        function onUiRaiseRequested() {
+            root.showNormal()
+            root.raise()
+            root.requestActivate()
+        }
         function onHostKeyNeeded(sessionId, keyInfo, isChanged) {
             pendingHostKeySession = sessionId;
             hostKeyDialog.keyInfo = keyInfo;

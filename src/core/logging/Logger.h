@@ -54,6 +54,7 @@ public:
     static QString redact(QString msg);
 
     LogModel* uiModel() { return m_uiModel; }
+    QString logFilePath() const;
     QString exportLogs(const QString& path);
     void clearUiHistory();
 
@@ -66,7 +67,7 @@ private:
     void rotateIfNeeded();
 
     QFile m_file;
-    std::recursive_mutex m_mutex;
+    mutable std::recursive_mutex m_mutex;
     bool m_fileLogging = true;
     bool m_debugMode = false;
     LogModel* m_uiModel = nullptr;

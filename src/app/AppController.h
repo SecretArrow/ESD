@@ -228,8 +228,14 @@ public:
     // commandRequested(id) and opens the matching UI.
     Q_INVOKABLE void triggerCommand(const QString& id) { emit commandRequested(id); }
 
+    // Raise/show the main window. Used by the second-instance handshake
+    // (launching the exe again focuses the running window) and the tray icon;
+    // the actual window manipulation is done by QML.
+    Q_INVOKABLE void requestUiRaise() { emit uiRaiseRequested(); }
+
 signals:
     void commandRequested(const QString& id);
+    void uiRaiseRequested();
     void firstRunChanged();
     void hostKeyNeeded(qint64 sessionId, const QVariantMap& keyInfo, bool isChanged);
     void authPromptNeeded(qint64 sessionId, const QVariantList& prompts);
