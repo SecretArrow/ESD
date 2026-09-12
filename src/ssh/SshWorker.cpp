@@ -886,8 +886,8 @@ bool SshWorker::openLocalX11Socket(int cid, ChannelEntry& entry)
     // Failure/teardown marker: only flags the entry; the pump reaps it on its
     // next tick (never erases from m_channels inside a socket signal).
     auto markDead = [this, cid](const QString& why) {
-        auto it = m_channels.constFind(cid);
-        if (it == m_channels.constEnd())
+        auto it = m_channels.find(cid);
+        if (it == m_channels.end())
             return;
         LOG_SSH_ERR(QStringLiteral("X11 channel %1 dropped: %2").arg(cid).arg(why));
         it->dead = true;

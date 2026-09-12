@@ -101,7 +101,7 @@ static bool hashedEntryMatches(const QString& hostField, const QString& host)
 // uses the OpenSSH non-standard-port convention, everything else is port 22.
 static bool decodeHostPattern(const QString& pattern, QString* hostOut, int* portOut)
 {
-    if (pattern.isEmpty() || pattern.startsWith(QLatin1Char('!')) || isHashedEntry(pattern))
+    if (pattern.isEmpty() || pattern.startsWith(QLatin1Char('!')) || HostKeyManager::isHashedEntry(pattern))
         return false;
     if (pattern.startsWith(QLatin1Char('['))) {
         const int close = pattern.indexOf(QLatin1Char(']'));
