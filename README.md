@@ -9,18 +9,16 @@ Eclipse SSH Desktop combines SSH, SFTP, SCP, a full terminal, port forwarding, a
 manager, a dual-panel file manager and automation tools into one fast native application,
 built with C++20 and Qt 6.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ [New] [Connect] [Terminal] [Files] [Tunnel] [Settings]      │
-├──────────────┬──────────────────────────────────────────────┤
-│ CONNECTIONS  │  Terminal │ Files │ Monitor                  │
-│ ★ prod-web   │  (full VT/xterm terminal, splits, recording) │
-│ ★ bastion    │                                              │
-│ staging      │                                              │
-├──────────────┴──────────────────────────────────────────────┤
-│ Connected · 12 ms · libssh      |  transfers / notifications │
-└─────────────────────────────────────────────────────────────┘
-```
+| First-run wizard | Main window |
+|---|---|
+| ![First-run wizard](docs/screenshots/01-first-run-wizard.png) | ![Main window](docs/screenshots/02-main.png) |
+
+| Command palette (Ctrl+Shift+P) | Settings |
+|---|---|
+| ![Command palette](docs/screenshots/03-command-palette.png) | ![Settings](docs/screenshots/05-settings.png) |
+
+> Screenshots are captured automatically by CI from the real binary on every push
+> (Xvfb + xdotool) — they can never go stale.
 
 ## Highlights
 
