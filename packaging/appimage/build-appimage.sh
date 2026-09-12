@@ -27,8 +27,12 @@ Categories=Network;RemoteAccess;
 Terminal=false
 DESKTOP
 
+export QMAKE="${QMAKE:-$(command -v qmake6 || command -v qmake)}"
+[ -n "$QMAKE" ] || { echo "qmake6 not found - required by linuxdeploy-plugin-qt"; exit 1; }
 export QML_SOURCES_PATHS="$ROOT/qml"
-export EXTRA_QT_MODULES="qml;quick;quickcontrols2;sql;network;concurrent;widgets;dbus"
+# NOTE: linuxdeploy-plugin-qt reads EXTRA_QT_PLUGINS (not *_MODULES).
+# sql = sqlite driver; imageformats = extra format plugins beyond defaults.
+export EXTRA_QT_PLUGINS="sql;imageformats"
 linuxdeploy --appdir "$APPDIR" --plugin qt --output appimage \
     --icon-file "$APPDIR/usr/share/icons/hicolor/256x256/apps/eclipse-ssh-desktop.png" \
     --desktop-file "$APPDIR/usr/share/applications/eclipse-ssh-desktop.desktop" \

@@ -75,6 +75,16 @@ jobs:
       - name: Portable archive
         run: ECLIPSE_BUILD_DIR="$PWD/build/ci" bash packaging/portable/make-portable.sh
 
+      - name: AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          curl -sL -o /tmp/linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -sL -o /tmp/linuxdeploy-plugin-qt https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x /tmp/linuxdeploy /tmp/linuxdeploy-plugin-qt
+          export PATH="/tmp:$PATH"
+          ECLIPSE_BUILD_DIR="$PWD/build/ci" bash packaging/appimage/build-appimage.sh
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -82,6 +92,7 @@ jobs:
           path: |
             dist/*.deb
             dist/*.tar.xz
+            dist/*.AppImage
           if-no-files-found: error
 
   windows:
@@ -101,6 +112,7 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-ccache
             mingw-w64-x86_64-qt6-base
             mingw-w64-x86_64-qt6-declarative
             mingw-w64-x86_64-qt6-5compat
@@ -111,13 +123,22 @@ jobs:
             mingw-w64-x86_64-openssl
             mingw-w64-x86_64-pkgconf
 
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: 'C:/Users/runneradmin/AppData/Local/ccache'
+          key: ccache-windows-${{ github.sha }}
+          restore-keys: ccache-windows-
+
       - name: Configure
         shell: msys2 {0}
         run: |
           cmake -G Ninja -B build/ci \
             -DCMAKE_BUILD_TYPE=Release \
             -DECLIPSE_WARNINGS_AS_ERRORS=OFF \
-            -DECLIPSE_BUILD_TESTS=ON
+            -DECLIPSE_BUILD_TESTS=ON \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
         shell: msys2 {0}
@@ -129,17 +150,28 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir build/ci --output-on-failure
 
-      - name: Deploy runtime (windeployqt)
+      - name: Deploy runtime (windeployqt + full DLL closure + verify)
+        shell: msys2 {0}
+        env:
+          ECLIPSE_BUILD_DIR: build/ci
+        run: bash packaging/windows/deploy-runtime.sh
+
+      - name: Smoke launch (offscreen)
         shell: msys2 {0}
         run: |
-          mkdir -p dist/win64
-          EXE=$(find build/ci -name 'eclipse-ssh-desktop.exe' -type f | head -1)
-          echo "EXE=$EXE"
-          [ -n "$EXE" ] || { echo 'exe not found'; find build/ci -maxdepth 2 -name '*.exe' | head; exit 1; }
-          cp "$EXE" dist/win64/
-          WDEP=$(command -v windeployqt6 || command -v windeployqt)
-          echo "Using $WDEP"
-          cd dist/win64 && "$WDEP" --qmldir ../../qml eclipse-ssh-desktop.exe
+          set +e
+          QT_QPA_PLATFORM=offscreen ECLIPSE_LOG_STDERR=1 timeout -k 2 8 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/smoke.log 2>&1
+          RC=$?
+          set -e
+          echo "smoke exit code: $RC"
+          cat /tmp/smoke.log || true
+          echo "--- recent app logs ---"
+          for V in "$APPDATA" "$LOCALAPPDATA"; do
+            [ -n "$V" ] || continue
+            D=$(cygpath -u "$V" 2>/dev/null || echo "$V")
+            find "$D" -type f -name '*.log' -mmin -3 2>/dev/null | head -5 | xargs -r tail -20 || true
+          done
+          [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ]
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
