@@ -97,11 +97,14 @@ jobs:
             xdotool key ctrl+shift+p; sleep 1.5
             import -window root dist/shots/03-command-palette.png
             xdotool key Escape; sleep 0.5
-            # open Settings through the palette search
+            # open Settings through the palette search (shows fuzzy filter)
             xdotool key ctrl+shift+p; sleep 1.2
             xdotool type --delay 40 "settings"; sleep 0.6
-            xdotool key Return; sleep 2
-            import -window root dist/shots/04-settings.png
+            import -window root dist/shots/04-palette-search.png
+            xdotool key Escape; sleep 0.5
+            # Settings page via the top-right nav button (deterministic coords)
+            xdotool mousemove 1233 21 click 1; sleep 2
+            import -window root dist/shots/05-settings.png
             kill $APPPID 2>/dev/null || true
           '
           echo "--- app log ---"; tail -20 /tmp/app.log || true
