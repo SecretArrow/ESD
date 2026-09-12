@@ -69,6 +69,41 @@ jobs:
       - name: ccache stats
         run: ccache -s || true
 
+      - name: Screenshots (Xvfb)
+        run: |
+          sudo apt-get install -y --no-install-recommends xvfb xdotool imagemagick fonts-dejavu-core
+          APP="$PWD/build/ci/src/eclipse-ssh-desktop"
+          [ -x "$APP" ] || { echo "app binary missing"; exit 1; }
+          mkdir -p dist/shots
+          xvfb-run -a --server-args="-screen 0 1440x900x24" bash -c '
+            set -e
+            export QT_QPA_PLATFORM=xcb
+            "$APP" >/tmp/app.log 2>&1 &
+            APPPID=$!
+            sleep 9
+            import -window root dist/shots/01-main.png
+            # command palette (Ctrl+Shift+P)
+            xdotool key ctrl+shift+p; sleep 1.5
+            import -window root dist/shots/02-command-palette.png
+            xdotool key Escape; sleep 0.5
+            # open Settings through the palette search
+            xdotool key ctrl+shift+p; sleep 1.2
+            xdotool type --delay 40 "settings"; sleep 0.6
+            xdotool key Return; sleep 2
+            import -window root dist/shots/03-settings.png
+            kill $APPPID 2>/dev/null || true
+          ' || echo "capture script reported failure (shots may still exist)"
+          echo "--- app log ---"; tail -20 /tmp/app.log || true
+          ls -la dist/shots
+          [ -s dist/shots/01-main.png ] || { echo "FATAL: main screenshot missing"; exit 1; }
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: dist/shots/*.png
+          if-no-files-found: error
+
       - name: Debian package
         run: ECLIPSE_BUILD_DIR="$PWD/build/ci" bash packaging/debian/build-deb.sh
 
