@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 import Eclipse
 
 // Compact find-in-buffer overlay bar for the terminal (Task 2-a).
