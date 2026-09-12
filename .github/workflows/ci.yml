@@ -75,12 +75,18 @@ jobs:
           APP="$PWD/build/ci/src/eclipse-ssh-desktop"
           [ -x "$APP" ] || { echo "app binary missing"; exit 1; }
           mkdir -p dist/shots
+          # export: the inner single-quoted bash -c inherits $APP from the env
+          export APP
           xvfb-run -a --server-args="-screen 0 1440x900x24" bash -c '
             set -e
             export QT_QPA_PLATFORM=xcb
             "$APP" >/tmp/app.log 2>&1 &
             APPPID=$!
-            sleep 9
+            # app must stay alive ~15s or the shot would be of an empty screen
+            for i in $(seq 1 30); do
+              kill -0 $APPPID 2>/dev/null || { echo "app died during startup:"; cat /tmp/app.log; exit 3; }
+              sleep 0.5
+            done
             import -window root dist/shots/01-main.png
             # command palette (Ctrl+Shift+P)
             xdotool key ctrl+shift+p; sleep 1.5
@@ -92,10 +98,15 @@ jobs:
             xdotool key Return; sleep 2
             import -window root dist/shots/03-settings.png
             kill $APPPID 2>/dev/null || true
-          ' || echo "capture script reported failure (shots may still exist)"
+          '
           echo "--- app log ---"; tail -20 /tmp/app.log || true
           ls -la dist/shots
+          # gate 1: main shot exists
           [ -s dist/shots/01-main.png ] || { echo "FATAL: main screenshot missing"; exit 1; }
+          # gate 2: not a blank screen (blank 1440x900 PNG has ~1-2 unique colors)
+          COLORS=$(identify -format '%k' dist/shots/01-main.png)
+          echo "unique colors in main shot: $COLORS"
+          [ "$COLORS" -gt 16 ] || { echo "FATAL: screenshot is blank - app window never appeared"; exit 1; }
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
