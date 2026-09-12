@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux build + test + package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build ccache g++ pkg-config qmake6 \
+            qt6-base-dev qt6-base-private-dev qt6-declarative-dev qt6-declarative-dev-tools \
+            libqt6sql6-sqlite libgl1-mesa-dev \
+            libssh-dev libssh2-1-dev libvterm-dev libssl-dev zlib1g-dev \
+            qml6-module-qtquick qml6-module-qtquick-window qml6-module-qtquick-controls \
+            qml6-module-qtquick-layouts qml6-module-qtquick-templates \
+            qml6-module-qtquick-dialogs qml6-module-qtqml qml6-module-qtqml-workerscript \
+            qml6-module-qt-labs-platform
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-linux-${{ github.sha }}
+          restore-keys: ccache-linux-
+
+      - name: Configure
+        run: |
+          cmake -G Ninja -B build/ci \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DECLIPSE_WARNINGS_AS_ERRORS=OFF \
+            -DECLIPSE_BUILD_TESTS=ON \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build build/ci -j
+
+      - name: Tests
+        run: ctest --test-dir build/ci --output-on-failure
+
+      - name: Smoke test (offscreen)
+        run: |
+          QT_QPA_PLATFORM=offscreen ./build/ci/src/eclipse-ssh-desktop --version
+          QT_QPA_PLATFORM=offscreen timeout 8 ./build/ci/src/eclipse-ssh-desktop || [ $? -eq 124 ]
+
+      - name: ccache stats
+        run: ccache -s || true
+
+      - name: Debian package
+        run: ECLIPSE_BUILD_DIR="$PWD/build/ci" bash packaging/debian/build-deb.sh
+
+      - name: Portable archive
+        run: ECLIPSE_BUILD_DIR="$PWD/build/ci" bash packaging/portable/make-portable.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            dist/*.deb
+            dist/*.tar.xz
+          if-no-files-found: error
+
+  windows:
+    name: Windows build (MSYS2 MinGW64)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          update: false
+          release: false
+          cache: true
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-qt6-base
+            mingw-w64-x86_64-qt6-declarative
+            mingw-w64-x86_64-qt6-5compat
+            mingw-w64-x86_64-libssh
+            mingw-w64-x86_64-libssh2
+            mingw-w64-x86_64-libvterm
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-pkgconf
+
+      - name: Configure
+        shell: msys2 {0}
+        run: |
+          cmake -G Ninja -B build/ci \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DECLIPSE_WARNINGS_AS_ERRORS=OFF \
+            -DECLIPSE_BUILD_TESTS=ON
+
+      - name: Build
+        shell: msys2 {0}
+        run: cmake --build build/ci -j
+
+      - name: Tests
+        shell: msys2 {0}
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build/ci --output-on-failure
+
+      - name: Deploy runtime (windeployqt)
+        shell: msys2 {0}
+        run: |
+          mkdir -p dist/win64
+          cp build/ci/src/eclipse-ssh-desktop.exe dist/win64/
+          WDEP=$(command -v windeployqt6 || command -v windeployqt)
+          echo "Using $WDEP"
+          cd dist/win64 && "$WDEP" --qmldir ../../qml eclipse-ssh-desktop.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: dist/win64/
+          if-no-files-found: error

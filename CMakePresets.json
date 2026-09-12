@@ -1,0 +1,61 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "ECLIPSE_BUILD_TESTS": "ON"
+            }
+        },
+        {
+            "name": "linux-release",
+            "displayName": "Linux Release (Ninja)",
+            "inherits": "base",
+            "generator": "Ninja",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+        },
+        {
+            "name": "linux-debug",
+            "displayName": "Linux Debug (Ninja)",
+            "inherits": "base",
+            "generator": "Ninja",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+        },
+        {
+            "name": "windows-release",
+            "displayName": "Windows Release (Ninja + MSVC)",
+            "inherits": "base",
+            "generator": "Ninja",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+        },
+        {
+            "name": "ci-linux-release",
+            "displayName": "CI Linux Release",
+            "inherits": "linux-release",
+            "cacheVariables": {
+                "ECLIPSE_WARNINGS_AS_ERRORS": "OFF",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/ci-install"
+            }
+        }
+    ],
+    "buildPresets": [
+        { "name": "linux-release", "configurePreset": "linux-release" },
+        { "name": "linux-debug", "configurePreset": "linux-debug" },
+        { "name": "windows-release", "configurePreset": "windows-release" },
+        { "name": "ci-linux-release", "configurePreset": "ci-linux-release" }
+    ],
+    "testPresets": [
+        {
+            "name": "linux-release",
+            "configurePreset": "linux-release",
+            "output": { "outputOnFailure": true }
+        }
+    ]
+}
