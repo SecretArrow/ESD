@@ -71,7 +71,7 @@ jobs:
 
       - name: Screenshots (Xvfb)
         run: |
-          sudo apt-get install -y --no-install-recommends xvfb xdotool imagemagick fonts-dejavu-core
+          sudo apt-get install -y --no-install-recommends xvfb xdotool imagemagick fonts-dejavu-core fonts-noto-color-emoji
           APP="$PWD/build/ci/src/eclipse-ssh-desktop"
           [ -x "$APP" ] || { echo "app binary missing"; exit 1; }
           mkdir -p dist/shots
@@ -87,24 +87,29 @@ jobs:
               kill -0 $APPPID 2>/dev/null || { echo "app died during startup:"; cat /tmp/app.log; exit 3; }
               sleep 0.5
             done
-            import -window root dist/shots/01-main.png
+            import -window root dist/shots/01-first-run-wizard.png
+            # dismiss the modal first-run wizard (Escape closes a Quick Dialog)
+            xdotool key Escape; sleep 1
+            xdotool search --name "Eclipse" windowactivate 2>/dev/null || true
+            xdotool mousemove 700 600 click 1; sleep 0.5
+            import -window root dist/shots/02-main.png
             # command palette (Ctrl+Shift+P)
             xdotool key ctrl+shift+p; sleep 1.5
-            import -window root dist/shots/02-command-palette.png
+            import -window root dist/shots/03-command-palette.png
             xdotool key Escape; sleep 0.5
             # open Settings through the palette search
             xdotool key ctrl+shift+p; sleep 1.2
             xdotool type --delay 40 "settings"; sleep 0.6
             xdotool key Return; sleep 2
-            import -window root dist/shots/03-settings.png
+            import -window root dist/shots/04-settings.png
             kill $APPPID 2>/dev/null || true
           '
           echo "--- app log ---"; tail -20 /tmp/app.log || true
           ls -la dist/shots
           # gate 1: main shot exists
-          [ -s dist/shots/01-main.png ] || { echo "FATAL: main screenshot missing"; exit 1; }
+          [ -s dist/shots/02-main.png ] || { echo "FATAL: main screenshot missing"; exit 1; }
           # gate 2: not a blank screen (blank 1440x900 PNG has ~1-2 unique colors)
-          COLORS=$(identify -format '%k' dist/shots/01-main.png)
+          COLORS=$(identify -format '%k' dist/shots/02-main.png)
           echo "unique colors in main shot: $COLORS"
           [ "$COLORS" -gt 16 ] || { echo "FATAL: screenshot is blank - app window never appeared"; exit 1; }
 
