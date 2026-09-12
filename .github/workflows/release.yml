@@ -192,25 +192,20 @@ jobs:
       - name: Single instance (2nd exits 0 and pokes 1st; 1st stays alive)
         shell: msys2 {0}
         run: |
-          QT_QPA_PLATFORM=offscreen ECLIPSE_HEADLESS=1 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/first.log 2>&1 &
+          ECLIPSE_HEADLESS=1 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/first.log 2>&1 &
           FIRST=$!
           sleep 6
           if ! kill -0 $FIRST 2>/dev/null; then echo "FIRST INSTANCE DIED"; cat /tmp/first.log; exit 1; fi
-          for V in "$APPDATA" "$LOCALAPPDATA"; do
-            [ -n "$V" ] || continue
-            D=$(cygpath -u "$V" 2>/dev/null || echo "$V")
-            L=$(find "$D" -type f -name 'eclipse-ssh.log' -mmin -3 2>/dev/null | head -1)
-            if [ -n "$L" ] && grep -q "starting" "$L"; then echo "first-instance log OK: $L"; FOUND=1; break; fi
-          done
-          [ "${FOUND:-0}" = "1" ] || { echo "FIRST INSTANCE NEVER COMPLETED STARTUP"; cat /tmp/first.log; kill -9 $FIRST 2>/dev/null || true; exit 1; }
+          grep -q "QML root" /tmp/first.log || { echo "FIRST INSTANCE NEVER REACHED QML LOAD"; cat /tmp/first.log; kill -9 $FIRST 2>/dev/null || true; exit 1; }
           set +e
-          ECLIPSE_HEADLESS=1 QT_QPA_PLATFORM=offscreen timeout -k 2 10 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/second.log 2>&1
+          ECLIPSE_HEADLESS=1 timeout -k 2 10 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/second.log 2>&1
           RC=$?
           set -e
           echo "second instance exit code: $RC"
           cat /tmp/second.log || true
-          if ! kill -0 $FIRST 2>/dev/null; then echo "FIRST INSTANCE DIED"; exit 1; fi
           if [ "$RC" -ne 0 ]; then echo "SECOND INSTANCE DID NOT EXIT CLEANLY"; kill -9 $FIRST 2>/dev/null || true; exit 1; fi
+          grep -q "already running" /tmp/second.log || { echo "MUTEX NOT DETECTED BY SECOND INSTANCE"; kill -9 $FIRST 2>/dev/null || true; exit 1; }
+          if ! kill -0 $FIRST 2>/dev/null; then echo "FIRST INSTANCE DIED"; exit 1; fi
           kill -9 $FIRST 2>/dev/null || true
           echo "single-instance handshake OK"
 

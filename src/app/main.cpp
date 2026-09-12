@@ -175,6 +175,7 @@ int main(int argc, char* argv[])
     if (HANDLE showUpEvent = CreateEventW(nullptr, FALSE, FALSE, kShowUpEventName)) {
         auto* raiseNotifier = new QWinEventNotifier(showUpEvent, &app);
         QObject::connect(raiseNotifier, &QWinEventNotifier::activated, &app, []() {
+            LOG_APP(QStringLiteral("Second instance requested raise - focusing main window."));
             QMetaObject::invokeMethod(&AppController::instance(), "requestUiRaise",
                                       Qt::QueuedConnection);
         });
