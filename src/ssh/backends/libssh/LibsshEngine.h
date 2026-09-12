@@ -65,10 +65,13 @@ public:
     std::recursive_mutex& rawMutex() override { return m_mutex; }
     ssh_session_struct* rawSession() const { return m_session; }
 
+    // Called by LibsshChannel after a successful x11-req on a shell channel;
+    // starts the local-display accept/bridge loop for forwarded X11 channels.
+    void registerX11Channel(ssh_channel_struct* shellChannel);
+
 private:
     Outcome finishConnect(const QString& hostForLog, int port,
                           const std::function<void(const HostKeyInfo&)>& hostKeyCb);
-    void registerX11Channel(ssh_channel_struct* shellChannel);
 
     ssh_session_struct* m_session = nullptr;
     QString m_identityPath;
