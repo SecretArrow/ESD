@@ -131,7 +131,10 @@ jobs:
         shell: msys2 {0}
         run: |
           mkdir -p dist/win64
-          cp build/ci/src/eclipse-ssh-desktop.exe dist/win64/
+          EXE=$(find build/ci -name 'eclipse-ssh-desktop.exe' -type f | head -1)
+          echo "EXE=$EXE"
+          [ -n "$EXE" ] || { echo 'exe not found'; find build/ci -maxdepth 2 -name '*.exe' | head; exit 1; }
+          cp "$EXE" dist/win64/
           WDEP=$(command -v windeployqt6 || command -v windeployqt)
           echo "Using $WDEP"
           cd dist/win64 && "$WDEP" --qmldir ../../qml eclipse-ssh-desktop.exe
