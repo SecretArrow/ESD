@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Eclipse
 
 // Lightweight server monitor via standard commands (no daemon needed).
 Rectangle {
@@ -43,11 +44,31 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 20
-        spacing: 16
+        anchors.margins: 12
+        spacing: 14
 
-        Label { text: session ? session.name : ""; font.pixelSize: 18; font.weight: Font.DemiBold; color: Theme.text }
-        Label { id: upText; text: "—"; color: Theme.textMuted }
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Label { text: session ? session.name : ""; font.pixelSize: 18; font.weight: Font.DemiBold; color: Theme.text }
+            Item { Layout.fillWidth: true }
+
+            // live connection state with the shared status dot
+            StatusDot {
+                visible: session !== null
+                state: session ? session.state : "Idle"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            Label {
+                visible: session !== null
+                text: session ? session.state : ""
+                color: Theme.textMuted
+                font.pixelSize: 13
+            }
+        }
+
+        Label { id: upText; text: "—"; color: Theme.text; font.pixelSize: 13 }
 
         GridLayout {
             columns: 2
@@ -55,25 +76,25 @@ Rectangle {
             rowSpacing: 14
             ColumnLayout {
                 spacing: 4
-                Label { text: qsTr("Memory"); color: Theme.text; font.pixelSize: 12 }
+                Label { text: qsTr("Memory"); color: Theme.textMuted; font.pixelSize: 12; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase }
                 ProgressBar { id: memBar; from: 0; to: 1; value: 0; Layout.preferredWidth: 260 }
-                Label { id: memText; text: "—"; color: Theme.textMuted; font.pixelSize: 11 }
+                Label { id: memText; text: "—"; color: Theme.text; font.pixelSize: 13 }
             }
             ColumnLayout {
                 spacing: 4
-                Label { text: qsTr("Disk (/)"); color: Theme.text; font.pixelSize: 12 }
+                Label { text: qsTr("Disk (/)"); color: Theme.textMuted; font.pixelSize: 12; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase }
                 ProgressBar { id: diskBar; from: 0; to: 1; value: 0; Layout.preferredWidth: 260 }
-                Label { id: diskText; text: "—"; color: Theme.textMuted; font.pixelSize: 11 }
+                Label { id: diskText; text: "—"; color: Theme.text; font.pixelSize: 13 }
             }
             ColumnLayout {
                 spacing: 4
-                Label { text: qsTr("Load average"); color: Theme.text; font.pixelSize: 12 }
-                Label { id: loadText; text: "—"; color: Theme.text; font.pixelSize: 15; font.family: "monospace" }
+                Label { text: qsTr("Load average"); color: Theme.textMuted; font.pixelSize: 12; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase }
+                Label { id: loadText; text: "—"; color: Theme.text; font.pixelSize: 13; font.family: "monospace" }
             }
             ColumnLayout {
                 spacing: 4
-                Label { text: qsTr("CPU cores"); color: Theme.text; font.pixelSize: 12 }
-                Label { id: coresText; text: "—"; color: Theme.text; font.pixelSize: 15; font.family: "monospace" }
+                Label { text: qsTr("CPU cores"); color: Theme.textMuted; font.pixelSize: 12; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase }
+                Label { id: coresText; text: "—"; color: Theme.text; font.pixelSize: 13; font.family: "monospace" }
             }
         }
         Label { text: qsTr("Collected via standard commands (/proc, df, uptime) - no agent required.")

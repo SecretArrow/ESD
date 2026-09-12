@@ -54,6 +54,7 @@ public:
     SshWorker* worker() const { return m_worker; }
 
     void connectTo(const QString& password, const QString& passphrase);
+    Q_INVOKABLE void reconnect();            // connectTo("","") alias for QML Retry
     Q_INVOKABLE void disconnect();
     Q_INVOKABLE void openTerminal(int cols = 80, int rows = 24);
     Q_INVOKABLE void answerAuthPrompt(const QStringList& answers);

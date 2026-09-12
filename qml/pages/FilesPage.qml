@@ -9,7 +9,13 @@ import Eclipse.Internal 1.0
 Rectangle {
     id: page
     property var session: null
+    signal connectWanted()
+
     color: Theme.surface
+
+    // A session is attached and authenticated -> show the browser,
+    // otherwise show the empty-state overlay.
+    readonly property bool sessionActive: session !== null && session.connected
 
     LocalFsModel { id: localModel }
     RemoteFsModel { id: remoteModel }
@@ -25,41 +31,96 @@ Rectangle {
     }
 
     ColumnLayout {
+        id: browser
+        visible: page.sessionActive
         anchors.fill: parent
         spacing: 0
 
         // path bars
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 38
+            Layout.margins: 8
             spacing: 6
-            Item { Layout.preferredWidth: 6 }
-            Label { text: qsTr("LOCAL"); color: Theme.textMuted; font.pixelSize: 10 }
-            TextField {
-                id: localPathField
-                Layout.fillWidth: true; text: localModel.path
-                onEditingFinished: localModel.path = text
-                font.pixelSize: 12
+
+            // LOCAL path pill
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 34
+                radius: Theme.radiusS
+                color: Theme.surfaceAlt
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 3
+                    spacing: 4
+                    Label { text: qsTr("LOCAL"); color: Theme.textMuted; font.pixelSize: 10 }
+                    TextField {
+                        id: localPathField
+                        Layout.fillWidth: true; text: localModel.path
+                        onEditingFinished: localModel.path = text
+                        font.pixelSize: 12
+                        background: Rectangle {
+                            implicitHeight: 26
+                            radius: Theme.radiusS
+                            color: "transparent"
+                            border.width: localPathField.activeFocus ? 1 : 0
+                            border.color: localPathField.activeFocus ? Theme.accent : "transparent"
+                        }
+                    }
+                    FlatButton {
+                        glyph: "↑"
+                        ToolTip.text: qsTr("Parent directory")
+                        onClicked: localModel.goUp()
+                    }
+                }
             }
-            Button { flat: true; text: "↑"; onClicked: localModel.goUp() }
-            Item { Layout.preferredWidth: 18 }
-            Label { text: qsTr("REMOTE"); color: Theme.textMuted; font.pixelSize: 10 }
-            TextField {
-                id: remotePathField
-                Layout.fillWidth: true; text: remoteModel.path
-                onEditingFinished: remoteModel.path = text
-                font.pixelSize: 12
+
+            // REMOTE path pill
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 34
+                radius: Theme.radiusS
+                color: Theme.surfaceAlt
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 3
+                    spacing: 4
+                    Label { text: qsTr("REMOTE"); color: Theme.textMuted; font.pixelSize: 10 }
+                    TextField {
+                        id: remotePathField
+                        Layout.fillWidth: true; text: remoteModel.path
+                        onEditingFinished: remoteModel.path = text
+                        font.pixelSize: 12
+                        background: Rectangle {
+                            implicitHeight: 26
+                            radius: Theme.radiusS
+                            color: "transparent"
+                            border.width: remotePathField.activeFocus ? 1 : 0
+                            border.color: remotePathField.activeFocus ? Theme.accent : "transparent"
+                        }
+                    }
+                    FlatButton {
+                        glyph: "↑"
+                        ToolTip.text: qsTr("Parent directory")
+                        onClicked: remoteModel.goUp()
+                    }
+                    FlatButton {
+                        glyph: "⟳"
+                        ToolTip.text: qsTr("Refresh")
+                        onClicked: { localModel.refresh(); remoteModel.refresh() }
+                    }
+                    FlatButton {
+                        text: qsTr("Terminal here")
+                        showBorder: true
+                        ToolTip.text: qsTr("Open a terminal in the remote directory")
+                        onClicked: if (session && session.connected) {
+                            App.openTerminalFor(session.sessionId);
+                            session.sendToTerminal("cd " + remoteModel.path + "\n");
+                        }
+                    }
+                }
             }
-            Button { flat: true; text: "↑"; onClicked: remoteModel.goUp() }
-            Button { flat: true; text: "⟳"
-                ToolTip.text: qsTr("Refresh"); ToolTip.visible: hovered
-                onClicked: { localModel.refresh(); remoteModel.refresh() } }
-            Button { flat: true; text: qsTr("Terminal here")
-                onClicked: if (session && session.connected) {
-                    App.openTerminalFor(session.sessionId);
-                    session.sendToTerminal("cd " + remoteModel.path + "\n");
-                } }
-            Item { Layout.preferredWidth: 6 }
         }
 
         // dual panels
@@ -93,12 +154,18 @@ Rectangle {
                 Layout.preferredWidth: 92
                 spacing: 4
                 Item { Layout.fillHeight: true }
-                Button { Layout.fillWidth: true; text: "→"; flat: true
-                    ToolTip.text: qsTr("Upload"); ToolTip.visible: hovered
-                    onClicked: uploadSelected() }
-                Button { Layout.fillWidth: true; text: "←"; flat: true
-                    ToolTip.text: qsTr("Download"); ToolTip.visible: hovered
-                    onClicked: downloadSelected() }
+                FlatButton {
+                    Layout.fillWidth: true
+                    glyph: "↑"
+                    ToolTip.text: qsTr("Upload")
+                    onClicked: uploadSelected()
+                }
+                FlatButton {
+                    Layout.fillWidth: true
+                    glyph: "↓"
+                    ToolTip.text: qsTr("Download")
+                    onClicked: downloadSelected()
+                }
                 Item { Layout.fillHeight: true }
             }
 
@@ -119,29 +186,97 @@ Rectangle {
                           : qsTr("Not connected")
                     color: Theme.textMuted
                 }
+                Row {
+                    spacing: 8
+                    visible: remoteModel.loading
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 10
+                    BusyIndicator { running: remoteModel.loading; width: 22; height: 22 }
+                    Label {
+                        text: qsTr("Loading…")
+                        color: Theme.textMuted; font.pixelSize: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
             }
         }
 
         // quick actions bar
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 34
+            Layout.preferredHeight: 42
             color: Theme.surfaceAlt
             RowLayout {
                 anchors.fill: parent; anchors.margins: 4; spacing: 4
-                Button { flat: true; text: qsTr("Upload")
+                FlatButton { glyph: "↑"; text: qsTr("Upload")
+                    ToolTip.text: qsTr("Upload selected files to the remote server")
                     onClicked: uploadSelected() }
-                Button { flat: true; text: qsTr("Download")
+                FlatButton { glyph: "↓"; text: qsTr("Download")
+                    ToolTip.text: qsTr("Download selected files to the local machine")
                     onClicked: downloadSelected() }
-                Button { flat: true; text: qsTr("Rename"); onClicked: renameRemote() }
-                Button { flat: true; text: qsTr("Delete"); onClicked: deleteRemote() }
-                Button { flat: true; text: qsTr("New folder"); onClicked: remoteModel.mkdir("new-folder-" + Date.now() % 1000) }
-                Button { flat: true; text: qsTr("Permissions"); onClicked: permsRemote() }
-                Button { flat: true; text: qsTr("View Archive"); onClicked: viewArchive() }
+                FlatButton { text: qsTr("Rename")
+                    ToolTip.text: qsTr("Rename the selected remote item")
+                    onClicked: renameRemote() }
+                FlatButton { text: qsTr("Delete"); danger: true
+                    ToolTip.text: qsTr("Delete the selected remote items")
+                    onClicked: deleteRemote() }
+                FlatButton { glyph: "＋"; text: qsTr("New folder")
+                    ToolTip.text: qsTr("Create a new folder on the remote server")
+                    onClicked: remoteModel.mkdir("new-folder-" + Date.now() % 1000) }
+                FlatButton { text: qsTr("Permissions")
+                    ToolTip.text: qsTr("Change permissions of the selected remote item")
+                    onClicked: permsRemote() }
+                FlatButton { text: qsTr("View Archive")
+                    ToolTip.text: qsTr("Browse the selected archive")
+                    onClicked: viewArchive() }
                 Item { Layout.fillWidth: true }
                 Label { font.pixelSize: 10; color: Theme.textMuted
                     text: qsTr("%1 remote items").arg(remoteModel.entryCount) }
                 Item { Layout.preferredWidth: 8 }
+            }
+        }
+
+        Label {
+            id: warnLabel
+            visible: false
+            color: Theme.warning; font.pixelSize: 12
+            Layout.fillWidth: true
+            Layout.leftMargin: 8; Layout.rightMargin: 8; Layout.bottomMargin: 4
+            wrapMode: Text.Wrap
+        }
+    }
+
+    // empty state: no active session -> centered overlay instead of browser
+    Rectangle {
+        anchors.fill: parent
+        visible: !page.sessionActive
+        color: Theme.background
+        ColumnLayout {
+            anchors.centerIn: parent
+            spacing: 10
+            Label {
+                text: "⇄"
+                font.pixelSize: 36
+                color: Theme.textMuted
+                Layout.alignment: Qt.AlignHCenter
+            }
+            Label {
+                text: qsTr("No active session")
+                font.pixelSize: 17; font.weight: Font.DemiBold; color: Theme.text
+                Layout.alignment: Qt.AlignHCenter
+            }
+            Label {
+                text: qsTr("Connect to a server to browse files.")
+                color: Theme.textMuted; font.pixelSize: 13
+                Layout.alignment: Qt.AlignHCenter
+            }
+            FlatButton {
+                text: qsTr("Connect")
+                accent: true
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 8
+                onClicked: page.connectWanted()
             }
         }
     }
@@ -150,9 +285,16 @@ Rectangle {
     Component {
         id: fileDelegate
         ItemDelegate {
+            id: row
             width: ListView.view.width
-            height: 26
+            height: 28
+            hoverEnabled: true
             highlighted: ListView.view.selection[index] === true
+            background: Rectangle {
+                color: row.highlighted ? Theme.accentSoft
+                     : (row.hovered ? Theme.hover : "transparent")
+                Behavior on color { ColorAnimation { duration: 120 } }
+            }
             onClicked: {
                 if (mouse.modifiers & Qt.ControlModifier)
                     ListView.view.selection[index] = !ListView.view.selection[index];
@@ -191,14 +333,14 @@ Rectangle {
             }
             contentItem: RowLayout {
                 spacing: 6
-                Label { text: isDir ? "📁" : (isLink ? "🔗" : "📄"); font.pixelSize: 12 }
+                Label { text: isDir ? "📁" : (isLink ? "🔗" : "📄"); font.pixelSize: 13 }
                 Label { text: name; color: Theme.text; font.pixelSize: 12; elide: Text.ElideRight
                     Layout.preferredWidth: 150 }
-                Label { text: sizeText; color: Theme.textMuted; font.pixelSize: 10; Layout.preferredWidth: 60
+                Label { text: sizeText; color: Theme.textMuted; font.pixelSize: 12; Layout.preferredWidth: 60
                     horizontalAlignment: Text.AlignRight }
-                Label { text: isDir ? "" : permsText; color: Theme.textMuted; font.pixelSize: 10 }
+                Label { text: isDir ? "" : permsText; color: Theme.textMuted; font.pixelSize: 12 }
                 Item { Layout.fillWidth: true }
-                Label { text: isDir ? "" : mtimeText; color: Theme.textMuted; font.pixelSize: 10 }
+                Label { text: isDir ? "" : mtimeText; color: Theme.textMuted; font.pixelSize: 12 }
                 Item { Layout.preferredWidth: 6 }
             }
         }
@@ -313,7 +455,4 @@ Rectangle {
 
     // archive viewer + text preview (C++ service via ArchiveBridge)
     ArchiveViewerDialog { id: archiveDialog; session: page.session }
-
-    Label { id: warnLabel; visible: false; color: Theme.warning; font.pixelSize: 11; Layout.fillWidth: true;
-        wrapMode: Text.Wrap }
 }

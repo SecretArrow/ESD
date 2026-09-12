@@ -8,6 +8,12 @@ import Eclipse.Internal 1.0
 Rectangle {
     id: page
     property var session: null
+
+    // Emitted by the connection banner's "Close tab" action. Main.qml connects
+    // this to App.sessions.closeSession(tabIndex); SessionPage itself does not
+    // know its tab index.
+    signal closeRequested()
+
     color: "#14171e"
 
     function openFiles() { subBar.currentIndex = 1 }
@@ -30,13 +36,146 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
 
-        // sub tabs
+        // sub tabs (Terminal / Files / Monitor)
         TabBar {
             id: subBar
             Layout.fillWidth: true
-            TabButton { text: qsTr("Terminal") }
-            TabButton { text: qsTr("Files") }
-            TabButton { text: qsTr("Monitor") }
+            Layout.preferredHeight: Theme.tabHeight
+            background: Rectangle {
+                color: "transparent"
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 1
+                    color: Theme.border
+                }
+            }
+            Repeater {
+                model: [qsTr("Terminal"), qsTr("Files"), qsTr("Monitor")]
+                TabButton {
+                    id: tabBtn
+                    width: implicitWidth
+                    font.pixelSize: 13
+                    hoverEnabled: true
+                    contentItem: Label {
+                        text: tabBtn.text
+                        font: tabBtn.font
+                        color: tabBtn.checked ? Theme.text : Theme.textMuted
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+                    background: Rectangle {
+                        color: tabBtn.hovered ? Theme.hover : "transparent"
+                        radius: Theme.radiusS
+                        Behavior on color { ColorAnimation { duration: 130 } }
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: parent.width - 16
+                            height: 2
+                            radius: 1
+                            color: Theme.accent
+                            opacity: tabBtn.checked ? 1 : 0
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- connection status banner --------------------------------------
+        // Visible whenever a session exists but is not Connected. Amber while
+        // connecting, red on failure, neutral when idle/disconnected. Gives
+        // visible login feedback plus Cancel / Retry / Close-tab actions.
+        Rectangle {
+            id: connBanner
+            Layout.fillWidth: true
+            readonly property string st: page.session ? page.session.state : ""
+            readonly property bool connected: st === "Connected"
+            readonly property bool connecting: st === "Resolving" || st === "Connecting"
+                                               || st === "WaitingHostKey" || st === "Authenticating"
+            readonly property bool disconnecting: st === "Disconnecting"
+            readonly property bool failed: st === "Error" || st === "AuthFailed"
+                                           || st === "HostKeyRejected"
+            readonly property bool offline: !connecting && !disconnecting && !failed
+            readonly property bool shown: page.session !== null && !connected
+
+            implicitHeight: connBanner.shown ? 34 : 0
+            opacity: connBanner.shown ? 1 : 0
+            visible: connBanner.shown || connBanner.opacity > 0
+            clip: true
+            color: {
+                if (connBanner.failed)
+                    return Qt.rgba(Theme.error.r, Theme.error.g, Theme.error.b, 0.12);
+                if (connBanner.connecting || connBanner.disconnecting)
+                    return Qt.rgba(Theme.warning.r, Theme.warning.g, Theme.warning.b, 0.12);
+                return Theme.hover; // Disconnected / Idle
+            }
+            Behavior on implicitHeight { NumberAnimation { duration: 180 } }
+            Behavior on opacity { NumberAnimation { duration: 180 } }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 8
+                spacing: 8
+
+                StatusDot {
+                    state: connBanner.st
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: {
+                        const h = page.session ? page.session.host : "";
+                        if (connBanner.connecting)
+                            return qsTr("Connecting to %1…").arg(h);
+                        if (connBanner.disconnecting)
+                            return qsTr("Disconnecting from %1…").arg(h);
+                        if (connBanner.failed)
+                            return qsTr("%1 — %2").arg(connBanner.st).arg(h);
+                        if (connBanner.st === "Disconnected")
+                            return qsTr("Disconnected from %1").arg(h);
+                        return qsTr("Not connected to %1").arg(h);
+                    }
+                    color: Theme.text
+                    font.pixelSize: 13
+                    elide: Label.ElideRight
+                }
+
+                FlatButton {
+                    visible: connBanner.connecting || connBanner.disconnecting
+                    text: qsTr("Cancel")
+                    danger: true
+                    ToolTip.text: qsTr("Abort the connection attempt")
+                    onClicked: if (page.session) page.session.disconnect()
+                }
+                FlatButton {
+                    visible: connBanner.failed || connBanner.offline
+                    text: qsTr("Retry")
+                    accent: true
+                    glyph: "↻"
+                    ToolTip.text: qsTr("Try connecting again")
+                    onClicked: {
+                        if (!page.session)
+                            return;
+                        page.session.reconnect(); // Q_INVOKABLE since v0.2.4
+                    }
+                }
+                FlatButton {
+                    visible: connBanner.failed || connBanner.offline
+                    text: qsTr("Close tab")
+                    danger: true
+                    ToolTip.text: qsTr("Disconnect and close this session tab")
+                    onClicked: {
+                        if (page.session)
+                            App.disconnectSession(page.session.sessionId);
+                        page.closeRequested();
+                    }
+                }
+            }
         }
 
         StackLayout {
@@ -50,27 +189,62 @@ Rectangle {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 30
+                    Layout.preferredHeight: 42
                     spacing: 6
-                    Item { Layout.preferredWidth: 4 }
-                    Button { flat: true; font.pixelSize: 11; text: qsTr("Split ▸")
-                        onClicked: terminalSplits.newRight() }
-                    Button { flat: true; font.pixelSize: 11; text: qsTr("Split ▾")
-                        onClicked: terminalSplits.newDown() }
-                    Button { flat: true; font.pixelSize: 11; text: qsTr("Copy")
-                        onClicked: terminalSplits.copyActive() }
-                    Button { flat: true; font.pixelSize: 11; text: qsTr("Paste")
-                        onClicked: terminalSplits.pasteActive() }
-                    Button { flat: true; font.pixelSize: 11; text: qsTr("Clear")
-                        onClicked: terminalSplits.clearActive() }
-                    Button { flat: true; font.pixelSize: 11; text: qsTr("Find")
-                        onClicked: page.openFind() }
-                    Button { flat: true; font.pixelSize: 11
-                        text: terminalSplits.recording ? qsTr("■ Stop recording") : qsTr("● Record")
-                        onClicked: terminalSplits.toggleRecording() }
+                    Item { Layout.preferredWidth: 6 }
+                    FlatButton {
+                        glyph: "▸"
+                        text: qsTr("Split")
+                        ToolTip.text: qsTr("Split terminal right")
+                        onClicked: terminalSplits.newRight()
+                    }
+                    FlatButton {
+                        glyph: "▾"
+                        text: qsTr("Split")
+                        ToolTip.text: qsTr("Split terminal down")
+                        onClicked: terminalSplits.newDown()
+                    }
+                    Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.border }
+                    FlatButton {
+                        glyph: "⧉"
+                        text: qsTr("Copy")
+                        ToolTip.text: qsTr("Copy selection")
+                        onClicked: terminalSplits.copyActive()
+                    }
+                    FlatButton {
+                        glyph: "⎘"
+                        text: qsTr("Paste")
+                        ToolTip.text: qsTr("Paste from clipboard")
+                        onClicked: terminalSplits.pasteActive()
+                    }
+                    FlatButton {
+                        glyph: "⌫"
+                        text: qsTr("Clear")
+                        ToolTip.text: qsTr("Clear terminal scrollback")
+                        onClicked: terminalSplits.clearActive()
+                    }
+                    Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.border }
+                    FlatButton {
+                        glyph: "⌕"
+                        text: qsTr("Find")
+                        ToolTip.text: qsTr("Find in terminal buffer")
+                        onClicked: page.openFind()
+                    }
+                    Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.border }
+                    FlatButton {
+                        glyph: terminalSplits.recording ? "■" : "●"
+                        text: terminalSplits.recording ? qsTr("Stop recording") : qsTr("Record")
+                        ToolTip.text: terminalSplits.recording ? qsTr("Stop recording this session")
+                                                               : qsTr("Record terminal output")
+                        danger: terminalSplits.recording
+                        onClicked: terminalSplits.toggleRecording()
+                    }
                     Item { Layout.fillWidth: true }
-                    Label { color: "#8b93a5"; font.pixelSize: 10
-                        text: session ? qsTr("%1@%2 · %3").arg(session.username).arg(session.host).arg(session.engineName) : "" }
+                    Label {
+                        color: Theme.textMuted
+                        font.pixelSize: 11
+                        text: session ? qsTr("%1@%2 · %3").arg(session.username).arg(session.host).arg(session.engineName) : ""
+                    }
                     Item { Layout.preferredWidth: 8 }
                 }
 
@@ -122,7 +296,10 @@ Rectangle {
                         id: tileComponent
                         Rectangle {
                             color: "#0d0f14"
-                            border.color: "#2a303c"
+                            radius: Theme.radiusS
+                            border.width: 1
+                            border.color: termItem.activeFocus ? Theme.accent : Theme.border
+                            Behavior on border.color { ColorAnimation { duration: 150 } }
                             property alias term: termItem
                             function setGeometry(x, y, w, h) { this.x = x; this.y = y; this.width = w; this.height = h }
                             TermItem {
@@ -144,6 +321,14 @@ Rectangle {
             // ============ FILES ============
             FilesPage {
                 session: page.session
+                onConnectWanted: {
+                    if (!page.session)
+                        return;
+                    const st = page.session.state;
+                    if (st === "Disconnected" || st === "Error" || st === "AuthFailed"
+                            || st === "HostKeyRejected" || st === "Idle")
+                        page.session.reconnect();
+                }
             }
 
             // ============ MONITOR ============

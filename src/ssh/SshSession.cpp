@@ -107,6 +107,13 @@ void SshSession::connectTo(const QString& password, const QString& passphrase)
     startWorker(password, passphrase);
 }
 
+// QML-facing retry (banner "Retry" button / Files empty-state "Connect").
+// Reuses stored credentials or the interactive auth prompt path.
+void SshSession::reconnect()
+{
+    connectTo(m_pendingPassword, m_pendingPassphrase);
+}
+
 void SshSession::startWorker(const QString& password, const QString& passphrase)
 {
     if (m_workerThread) { // restart path
