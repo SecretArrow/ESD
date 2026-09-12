@@ -64,7 +64,7 @@ void SixelDecoder::feed(const QByteArray& data)
     if (!m_started || data.isEmpty())
         return;
     for (int i = 0; i < data.size(); ++i)
-        handleByte(unsigned char(data.at(i)));
+        handleByte(static_cast<unsigned char>(data.at(i)));
 }
 
 void SixelDecoder::finish()
