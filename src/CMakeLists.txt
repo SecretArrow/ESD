@@ -230,6 +230,17 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/resources/appicon.png PROPERTIES
 qt_add_resources(eclipse-ssh-desktop "icons"
     PREFIX "/"
     FILES ${CMAKE_SOURCE_DIR}/resources/appicon.png)
+
+if(WIN32)
+    # Windows binary identity: embed the multi-size application icon and a
+    # VERSIONINFO block (description, version, publisher). Configured from the
+    # CMake project version so it can never drift from the release version.
+    set(ESD_ICON_RC_PATH "${CMAKE_SOURCE_DIR}/resources/eclipse-ssh-desktop.ico")
+    configure_file("${CMAKE_SOURCE_DIR}/resources/app.rc.in"
+                   "${CMAKE_BINARY_DIR}/generated/app.rc" @ONLY)
+    target_sources(eclipse-ssh-desktop PRIVATE
+        "${CMAKE_BINARY_DIR}/generated/app.rc")
+endif()
 eclipse_set_target_warnings(eclipse-ssh-desktop)
 
 # ---------------------------------------------------------------------------

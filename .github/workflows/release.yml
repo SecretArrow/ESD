@@ -182,6 +182,8 @@ jobs:
     needs: [linux, windows]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -192,8 +194,15 @@ jobs:
           find artifacts -type f \( -name '*.deb' -o -name '*.tar.xz' -o -name '*.zip' -o -name '*.AppImage' \) -exec cp {} rel/ \;
           ls -la rel/
 
+      - name: Generate SHA256 checksums
+        run: |
+          cd rel
+          sha256sum *.zip *.AppImage *.tar.xz *.deb > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          body_path: .github/release-body.md
           files: rel/*

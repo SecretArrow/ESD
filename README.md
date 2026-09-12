@@ -54,6 +54,26 @@ built with C++20 and Qt 6.
   palette fuzzy search, light/dark/system themes, custom accent color.
 - **Fast and native** — C++20, Qt 6 Quick UI, worker-thread SSH engine; the UI never blocks.
 
+## Download & first launch (Windows)
+
+Grab `eclipse-ssh-desktop-windows-x86_64.zip` from the
+[latest release](https://github.com/SecretArrow/ESD/releases/latest), extract, and run
+`eclipse-ssh-desktop.exe` — no installer, no admin rights needed. The zip is
+self-contained (Qt, MinGW runtime, libssh/OpenSSL and every other dependency are
+bundled and verified in CI).
+
+Because the binary is unsigned open source, Windows SmartScreen shows
+**"Windows protected your PC"** on first launch. Click **More info -> Run anyway**;
+Windows remembers the choice. To avoid the warning entirely, right-click the zip ->
+**Properties -> Unblock** before extracting, or run `Get-ChildItem -Recurse |
+Unblock-File` in the extracted folder. Full details, plus SHA-256 verification
+against the `SHA256SUMS.txt` published with every release:
+[docs/windows-smartscreen.md](docs/windows-smartscreen.md).
+
+The application itself carries proper Windows metadata (product name, version,
+publisher, icon) embedded at build time, so it is identified correctly in Explorer,
+the taskbar and the installed-apps list.
+
 ## Repository layout
 
 ```
@@ -92,6 +112,7 @@ See [docs/BUILD.md](docs/BUILD.md) for Windows instructions and packaging.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — module map, threading model, engine abstraction
 - [docs/SECURITY.md](docs/SECURITY.md) — credential storage, host key policy, logging redaction
 - [docs/BUILD.md](docs/BUILD.md) — per-platform build & packaging guide
+- [docs/windows-smartscreen.md](docs/windows-smartscreen.md) — Windows SmartScreen & first-run guide
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — coding rules, commit/PR process
 - [docs/THIRD_PARTY_LICENSES/](docs/THIRD_PARTY_LICENSES/README.md) — dependency licenses
 

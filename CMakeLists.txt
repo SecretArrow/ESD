@@ -1,11 +1,17 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(EclipseSSH
-    VERSION 0.2.1
+    VERSION 0.2.2
     DESCRIPTION "Eclipse SSH Desktop - a modern, modular SSH/SFTP client"
     LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+# Windows resources (.rc: application icon + VERSIONINFO). Enabled early so
+# target_sources(... app.rc) in src/CMakeLists.txt resolves a compiler.
+if(WIN32)
+    enable_language(RC)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
