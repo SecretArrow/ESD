@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QFile>
 #include <QIcon>
 #include <QLockFile>
 #include <QPainter>
@@ -84,6 +85,12 @@ int main(int argc, char* argv[])
 
     QQmlApplicationEngine engine;
 
+    // qt_add_qml_module's default RESOURCE_PREFIX is "/qt/qml" on Qt >= 6.5 and
+    // "/" on older Qt 6.x. The engine only auto-searches qrc:/qt/qml since 6.5,
+    // so register both layouts explicitly; the non-existing one is ignored.
+    engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
+    engine.addImportPath(QStringLiteral("qrc:/"));
+
     // Context properties
     engine.rootContext()->setContextProperty(QStringLiteral("App"), &app_);
     engine.rootContext()->setContextProperty(QStringLiteral("ThemeBridge"), &ThemeManager::instance());
@@ -98,7 +105,16 @@ int main(int argc, char* argv[])
     qmlRegisterType<SnippetModel>("Eclipse.Internal", 1, 0, "SnippetModel");
     qmlRegisterType<TrayController>("Eclipse.Internal", 1, 0, "QTrayIcon");
 
-    const QUrl url(QStringLiteral("qrc:/qt/qml/Eclipse/qml/Main.qml"));
+    // Pick the Main.qml URL that exists in this build's resources (QFile handles
+    // the qrc: scheme; QUrl::toLocalFile() would return an empty string here).
+    QUrl url(QStringLiteral("qrc:/qt/qml/Eclipse/qml/Main.qml"));
+    for (const char* candidate : { "qrc:/qt/qml/Eclipse/qml/Main.qml",
+                                   "qrc:/Eclipse/qml/Main.qml" }) {
+        if (QFile::exists(QString::fromLatin1(candidate))) {
+            url = QUrl(QString::fromLatin1(candidate));
+            break;
+        }
+    }
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &app,
                      [url](QObject* obj, const QUrl& objUrl) {
                          if (!obj && url == objUrl)

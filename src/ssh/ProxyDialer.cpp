@@ -4,7 +4,7 @@
 #include <QHostAddress>
 #include <QHostInfo>
 
-#ifdef Q_OS_WIN
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -218,7 +218,7 @@ Outcome proxyHandshake(int fd, const QString& host, quint16 port, const ProxyCon
 
 Outcome dial(const QString& host, int port, const ProxyConfig& proxy, int timeoutMs, int* fdOut)
 {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
     WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
 #endif
@@ -238,7 +238,13 @@ Outcome dial(const QString& host, int port, const ProxyConfig& proxy, int timeou
                                QByteArray::number(connectPort).constData(), &hints, &result);
     if (rc != 0 || !result)
         return Outcome::fail(QStringLiteral("Could not resolve %1.").arg(connectHost),
+#ifdef _WIN32
+                             // gai_strerror maps to the wchar_t variant when UNICODE is
+                             // defined (Qt6 builds); use the ANSI variant explicitly.
+                             QStringLiteral("getaddrinfo: %1").arg(QString::fromLatin1(gai_strerrorA(rc))),
+#else
                              QStringLiteral("getaddrinfo: %1").arg(gai_strerror(rc)),
+#endif
                              QStringLiteral("Check the host name and your DNS settings."));
 
     int fd = -1;
@@ -248,7 +254,7 @@ Outcome dial(const QString& host, int port, const ProxyConfig& proxy, int timeou
         if (fd < 0)
             continue;
         // non-blocking connect with poll
-#ifdef Q_OS_WIN
+#ifdef _WIN32
         u_long mode = 1;
         ioctlsocket(SOCKET(fd), FIONBIO, &mode);
 #else
@@ -258,15 +264,21 @@ Outcome dial(const QString& host, int port, const ProxyConfig& proxy, int timeou
         const int crc = ::connect(fd, ai->ai_addr, int(ai->ai_addrlen));
         bool connected = crc == 0;
         if (!connected) {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
             const int err = WSAGetLastError();
             connected = err == WSAEWOULDBLOCK;
 #else
             connected = errno == EINPROGRESS;
 #endif
             if (connected) {
+#ifdef _WIN32
+                // pollfd::fd is SOCKET (unsigned) on Windows; a plain int is a
+                // narrowing conversion (hard error in brace-init).
+                pollfd p { SOCKET(fd), POLLOUT, 0 };
+#else
                 pollfd p { fd, POLLOUT, 0 };
-#ifdef Q_OS_WIN
+#endif
+#ifdef _WIN32
                 const int prc = WSAPoll(&p, 1, timeoutMs);
 #else
                 const int prc = ::poll(&p, 1, timeoutMs);

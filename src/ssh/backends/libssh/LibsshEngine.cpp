@@ -6,7 +6,8 @@
 #include <QThread>
 
 #include <fcntl.h>
-#ifdef Q_OS_WIN
+#include <sys/stat.h>
+#ifdef _WIN32
 #include <io.h>
 #else
 #include <unistd.h>
@@ -300,7 +301,7 @@ void LibsshEngine::disconnect()
     if (m_session && ssh_is_connected(m_session))
         ssh_disconnect(m_session);
     if (m_ownedFd >= 0) {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
         ::closesocket(m_ownedFd);
 #else
         ::close(m_ownedFd);

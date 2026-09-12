@@ -35,7 +35,7 @@
 #include <sys/stat.h>
 #include <ctime>
 
-#ifndef Q_OS_WIN
+#ifndef _WIN32
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -44,6 +44,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 #else
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #endif
@@ -230,7 +234,7 @@ Outcome failOp(LIBSSH2_SESSION* session, int rc, const QString& what)
 
 bool setNonBlocking(libssh2_socket_t fd, QString* err)
 {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
     u_long mode = 1;
     if (ioctlsocket(fd, FIONBIO, &mode) != 0) {
         if (err) *err = QStringLiteral("ioctlsocket(FIONBIO) failed");
@@ -248,7 +252,7 @@ bool setNonBlocking(libssh2_socket_t fd, QString* err)
 
 void closeSocket(libssh2_socket_t fd)
 {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
     ::closesocket(fd);
 #else
     ::close(fd);
@@ -260,7 +264,7 @@ int pollWritable(libssh2_socket_t fd, qint64 timeoutMs)
 {
     if (timeoutMs < 0)
         timeoutMs = 0;
-#ifdef Q_OS_WIN
+#ifdef _WIN32
     fd_set wset;
     FD_ZERO(&wset);
     FD_SET(fd, &wset);
@@ -283,7 +287,7 @@ std::once_flag g_wsaInit;
 // (required by the session's non-blocking mode).
 libssh2_socket_t tcpConnect(const QString& host, int port, int timeoutMs, QString* err)
 {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
     std::call_once(g_wsaInit, [] {
         WSADATA data;
         ::WSAStartup(MAKEWORD(2, 2), &data);
@@ -327,14 +331,14 @@ libssh2_socket_t tcpConnect(const QString& host, int port, int timeoutMs, QStrin
         const int cr = ::connect(s, ai->ai_addr, socklen_t(ai->ai_addrlen));
         bool inProgress = (cr == 0);
         if (cr != 0) {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
             inProgress = (WSAGetLastError() == WSAEWOULDBLOCK);
 #else
             inProgress = (errno == EINPROGRESS);
 #endif
         }
         if (!inProgress) {
-#ifndef Q_OS_WIN
+#ifndef _WIN32
             lastErr = QStringLiteral("connect: %1").arg(std::strerror(errno));
 #endif
             closeSocket(s);
@@ -351,7 +355,7 @@ libssh2_socket_t tcpConnect(const QString& host, int port, int timeoutMs, QStrin
         socklen_t slen = sizeof(soerr);
         if (::getsockopt(s, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&soerr), &slen) != 0
             || soerr != 0) {
-#ifndef Q_OS_WIN
+#ifndef _WIN32
             lastErr = QStringLiteral("connect: %1").arg(std::strerror(soerr));
 #endif
             closeSocket(s);

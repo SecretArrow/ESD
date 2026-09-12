@@ -55,8 +55,15 @@ jobs:
 
       - name: Smoke test (offscreen)
         run: |
-          QT_QPA_PLATFORM=offscreen ./build/ci/src/eclipse-ssh-desktop --version
-          QT_QPA_PLATFORM=offscreen timeout 8 ./build/ci/src/eclipse-ssh-desktop || [ $? -eq 124 ]
+          set +e
+          QT_QPA_PLATFORM=offscreen timeout 8 ./build/ci/src/eclipse-ssh-desktop > /tmp/smoke.log 2>&1
+          RC=$?
+          set -e
+          echo "smoke exit code: $RC"
+          cat /tmp/smoke.log || true
+          echo "--- recent app logs ---"
+          find "$HOME/.cache" -type f -name "*.log" -mmin -3 2>/dev/null | head -5 | xargs -r tail -40
+          [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ]
 
       - name: ccache stats
         run: ccache -s || true

@@ -2,7 +2,7 @@
 
 #include <QThread>
 
-#ifdef Q_OS_WIN
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -20,7 +20,14 @@ namespace eclipse {
 
 std::pair<int, int> makeSocketPair()
 {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
+    // One-time Winsock initialization (process-wide, thread-safe).
+    static const bool wsaInit = [] {
+        WSADATA wsa;
+        return ::WSAStartup(MAKEWORD(2, 2), &wsa) == 0;
+    }();
+    Q_UNUSED(wsaInit);
+
     SOCKET listener = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listener == INVALID_SOCKET)
         return { -1, -1 };
@@ -64,7 +71,7 @@ void closeFd(int fd)
 {
     if (fd < 0)
         return;
-#ifdef Q_OS_WIN
+#ifdef _WIN32
     ::closesocket(SOCKET(fd));
 #else
     ::close(fd);

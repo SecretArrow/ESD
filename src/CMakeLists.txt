@@ -33,9 +33,14 @@ target_link_libraries(eclipse_core
         Qt6::Gui
         Qt6::Network
         Qt6::Sql
-        Qt6::DBus
         OpenSSL::Crypto
 )
+
+if(NOT WIN32)
+    # QtDBus does not exist on Windows builds; only the Linux Secret Service
+    # credential backend uses it (sources are excluded above on WIN32).
+    target_link_libraries(eclipse_core PUBLIC Qt6::DBus)
+endif()
 
 if(WIN32)
     target_sources(eclipse_core PRIVATE core/credentials/windows/WindowsCredentialStore.cpp)
@@ -184,6 +189,7 @@ qt_add_executable(eclipse-ssh-desktop WIN32
 qt_add_qml_module(eclipse-ssh-desktop
     URI Eclipse
     VERSION 1.0
+    RESOURCE_PREFIX "/qt/qml"
     QML_FILES ${ECLIPSE_QML_FILES}
     NO_PLUGIN
     NO_IMPORT_SCAN

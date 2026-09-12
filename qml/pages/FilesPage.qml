@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Qt.labs.platform as LabPlatform
 import Eclipse
 import Eclipse.Internal 1.0
 
