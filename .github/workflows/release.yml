@@ -147,7 +147,7 @@ jobs:
         shell: msys2 {0}
         run: |
           set +e
-          QT_QPA_PLATFORM=offscreen ECLIPSE_LOG_STDERR=1 timeout -k 2 8 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/smoke.log 2>&1
+          QT_QPA_PLATFORM=offscreen ECLIPSE_HEADLESS=1 ECLIPSE_LOG_STDERR=1 timeout -k 2 8 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/smoke.log 2>&1
           RC=$?
           set -e
           echo "smoke exit code: $RC"
@@ -156,9 +156,10 @@ jobs:
           for V in "$APPDATA" "$LOCALAPPDATA"; do
             [ -n "$V" ] || continue
             D=$(cygpath -u "$V" 2>/dev/null || echo "$V")
-            find "$D" -type f -name '*.log' -mmin -3 2>/dev/null | head -5 | xargs -r tail -20 || true
+            find "$D" -type f -name 'eclipse-ssh.log' -mmin -3 2>/dev/null | head -1 | xargs -r tail -5 || true
           done
           [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ]
+          if grep -qi "is not installed" /tmp/smoke.log; then echo "QML MODULE MISSING IN DIST"; exit 1; fi
 
       - name: Zip portable
         shell: msys2 {0}
@@ -171,24 +172,37 @@ jobs:
           fi
 
 
-      - name: Smoke launch (real windows desktop)
+      - name: Smoke launch (real windows desktop, bundled QML only)
         shell: msys2 {0}
         run: |
           set +e
           unset QT_QPA_PLATFORM
-          timeout -k 2 10 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/smoke-win.log 2>&1
+          ECLIPSE_HEADLESS=1 timeout -k 2 12 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/smoke-win.log 2>&1
           RC=$?
           set -e
           echo "real-platform smoke exit code: $RC"
           cat /tmp/smoke-win.log || true
           [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ]
+          grep -q "QML root" /tmp/smoke-win.log || { echo "APP NEVER REACHED QML LOAD"; exit 1; }
+          if grep -qi "is not installed" /tmp/smoke-win.log; then
+            echo "QML MODULES NOT IMPORTABLE FROM DIST (qt.conf/import path bug)"; exit 1
+          fi
+          test -f ./dist/win64/qt.conf || { echo "qt.conf missing from dist"; exit 1; }
 
       - name: Single instance (2nd exits 0 and pokes 1st; 1st stays alive)
         shell: msys2 {0}
         run: |
-          QT_QPA_PLATFORM=offscreen ./dist/win64/eclipse-ssh-desktop.exe > /tmp/first.log 2>&1 &
+          QT_QPA_PLATFORM=offscreen ECLIPSE_HEADLESS=1 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/first.log 2>&1 &
           FIRST=$!
           sleep 6
+          if ! kill -0 $FIRST 2>/dev/null; then echo "FIRST INSTANCE DIED"; cat /tmp/first.log; exit 1; fi
+          for V in "$APPDATA" "$LOCALAPPDATA"; do
+            [ -n "$V" ] || continue
+            D=$(cygpath -u "$V" 2>/dev/null || echo "$V")
+            L=$(find "$D" -type f -name 'eclipse-ssh.log' -mmin -3 2>/dev/null | head -1)
+            if [ -n "$L" ] && grep -q "starting" "$L"; then echo "first-instance log OK: $L"; FOUND=1; break; fi
+          done
+          [ "${FOUND:-0}" = "1" ] || { echo "FIRST INSTANCE NEVER COMPLETED STARTUP"; cat /tmp/first.log; kill -9 $FIRST 2>/dev/null || true; exit 1; }
           set +e
           ECLIPSE_HEADLESS=1 QT_QPA_PLATFORM=offscreen timeout -k 2 10 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/second.log 2>&1
           RC=$?

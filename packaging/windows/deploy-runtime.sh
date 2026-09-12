@@ -39,6 +39,20 @@ WDEP=$(command -v windeployqt6 || command -v windeployqt)
 echo "Using $WDEP"
 (cd "$STAGE" && "$WDEP" --qmldir "$ROOT/qml" eclipse-ssh-desktop.exe)
 
+# --- 1.5) qt.conf: pin runtime search paths to the bundled layout ----------
+# Without qt.conf, QLibraryInfo falls back to the prefix baked into
+# Qt6Core.dll at build time (the CI's C:/msys64/mingw64). That path does not
+# exist on end-user machines, so the bundled QML modules under win64\qml are
+# never found -> Main.qml fails to import QtQuick.Controls -> the UI never
+# opens (silent exit). 'Prefix = .' resolves every path (QML imports,
+# plugins, translations) relative to the exe directory.
+cat > "$STAGE/qt.conf" <<'EOF'
+[Paths]
+Prefix = .
+EOF
+
+echo "Wrote $STAGE/qt.conf (Prefix = .)"
+
 # --- 2) Trim plugins we never use (and whose 3rd-party deps we can't ship) --
 rm -rf "$STAGE/qmltooling"
 rm -f "$STAGE"/sqldrivers/qsqlibase.dll "$STAGE"/sqldrivers/qsqlmysql.dll \
@@ -99,6 +113,9 @@ if [ "$FAIL" -ne 0 ]; then
   echo "ERROR: DLL closure incomplete -- refusing to package. See UNRESOLVED list above."
   exit 1
 fi
+
+# qt.conf is mandatory: without it QML import paths point at the build machine.
+[ -f "$STAGE/qt.conf" ] || { echo "ERROR: qt.conf missing from the bundle"; exit 1; }
 
 echo
 echo "Deployed bundle: $STAGE ($(find "$STAGE" -name '*.dll' | wc -l) DLLs, $(du -sh "$STAGE" | cut -f1))"

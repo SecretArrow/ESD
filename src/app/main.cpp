@@ -198,6 +198,9 @@ int main(int argc, char* argv[])
     // so register both layouts explicitly; the non-existing one is ignored.
     engine.addImportPath(QStringLiteral("qrc:/qt/qml"));
     engine.addImportPath(QStringLiteral("qrc:/"));
+    // Belt-and-braces: also look for QML modules next to the executable
+    // (deployed layout win64\qml), independent of qt.conf processing.
+    engine.addImportPath(QCoreApplication::applicationDirPath() + QStringLiteral("/qml"));
 
     // Context properties
     engine.rootContext()->setContextProperty(QStringLiteral("App"), &app_);
