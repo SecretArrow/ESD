@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QRegularExpression>
 
+#include <cstdio>
 #include "../../common/Utils.h"
 
 namespace eclipse {
@@ -80,6 +81,12 @@ Logger::Logger()
         case QtFatalMsg: lvl = LogLevel::Error; break;
         }
         Logger::instance().log(LogCategory::Application, lvl, QStringLiteral("[qt] %1").arg(msg));
+        // Optional stderr passthrough for headless/CI debugging (off by default).
+        static const bool stderrEcho = qEnvironmentVariableIsSet("ECLIPSE_LOG_STDERR");
+        if (stderrEcho && type != QtDebugMsg && type != QtInfoMsg) {
+            std::fprintf(stderr, "[qt] %s\n", qPrintable(msg));
+            std::fflush(stderr);
+        }
     });
 }
 

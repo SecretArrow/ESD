@@ -6,6 +6,8 @@
 #include <QPainter>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQmlError>
+#include <cstdio>
 #include <QQuickStyle>
 #include <QSystemTrayIcon>
 
@@ -85,6 +87,15 @@ int main(int argc, char* argv[])
 
     QQmlApplicationEngine engine;
 
+    // Surface QML warnings on stderr even when the app logger owns the Qt
+    // message handler (headless/CI diagnostics).
+    QObject::connect(&engine, &QQmlApplicationEngine::warnings, &app,
+                     [](const QList<QQmlError>& qmlWarnings) {
+                         for (const QQmlError& e : qmlWarnings)
+                             std::fprintf(stderr, "QML: %s\n", qPrintable(e.toString()));
+                         std::fflush(stderr);
+                     });
+
     // qt_add_qml_module's default RESOURCE_PREFIX is "/qt/qml" on Qt >= 6.5 and
     // "/" on older Qt 6.x. The engine only auto-searches qrc:/qt/qml since 6.5,
     // so register both layouts explicitly; the non-existing one is ignored.
@@ -115,6 +126,8 @@ int main(int argc, char* argv[])
             break;
         }
     }
+    std::fprintf(stderr, "QML root: %s\n", qPrintable(url.toString()));
+    std::fflush(stderr);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &app,
                      [url](QObject* obj, const QUrl& objUrl) {
                          if (!obj && url == objUrl)

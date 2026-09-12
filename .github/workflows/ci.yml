@@ -56,7 +56,7 @@ jobs:
       - name: Smoke test (offscreen)
         run: |
           set +e
-          QT_QPA_PLATFORM=offscreen timeout 8 ./build/ci/src/eclipse-ssh-desktop > /tmp/smoke.log 2>&1
+          ECLIPSE_LOG_STDERR=1 QT_QPA_PLATFORM=offscreen timeout 8 ./build/ci/src/eclipse-ssh-desktop > /tmp/smoke.log 2>&1
           RC=$?
           set -e
           echo "smoke exit code: $RC"
