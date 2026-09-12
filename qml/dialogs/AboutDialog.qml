@@ -11,6 +11,7 @@ Dialog {
     modal: true
     parent: Overlay.overlay
     anchors.centerIn: parent
+    width: 460
     standardButtons: Dialog.Close
     contentItem: ColumnLayout {
         spacing: 8

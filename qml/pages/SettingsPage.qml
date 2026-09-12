@@ -71,7 +71,8 @@ Rectangle {
                                 model: ["#5B8DEF", "#3fb66f", "#e2b12c", "#e25d5d", "#b46bd6", "#4fc2c5"]
                                 Rectangle {
                                     width: 30; height: 30; radius: 15; color: modelData
-                                    border.width: ThemeBridge.accent.toUpperCase() === modelData.toUpperCase() ? 3 : 1
+                                    // QColor has no toUpperCase(); go through toString()
+                                    border.width: ThemeBridge.accent.toString().toUpperCase() === modelData.toUpperCase() ? 3 : 1
                                     border.color: Theme.text
                                     MouseArea { anchors.fill: parent; onClicked: {
                                         App.settings.accentColor = modelData; applyTheme() } }

@@ -7,6 +7,16 @@ import Eclipse
 Rectangle {
     color: Theme.surface
 
+    // root-level so Component.onCompleted below can reference it
+    function refreshFilter() {
+        Logs.setFilter(filterField.text, levelBox.currentIndex, categoryBox.currentText);
+    }
+
+    // root-level so Component.onCompleted can reference it
+    function refreshFilter() {
+        Logs.setFilter(filterField.text, levelBox.currentIndex, categoryBox.currentText);
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 8
@@ -59,10 +69,6 @@ Rectangle {
             }
             ScrollBar.vertical: ScrollBar {}
         }
-
-        function refreshFilter() {
-            Logs.setFilter(filterField.text, levelBox.currentIndex, categoryBox.currentText);
-        }
     }
 
     function exportText() {
@@ -78,5 +84,6 @@ Rectangle {
         filterField.onTextChanged.connect(refreshFilter);
         levelBox.onActivated.connect(refreshFilter);
         categoryBox.onActivated.connect(refreshFilter);
+        refreshFilter();
     }
 }

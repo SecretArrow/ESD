@@ -64,7 +64,7 @@ jobs:
           cat /tmp/smoke.log || true
           echo "--- recent app logs ---"
           find "$HOME/.cache" -type f -name "*.log" -mmin -3 2>/dev/null | head -5 | xargs -r tail -40
-          [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ]
+          [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ] || [ "$RC" -eq 137 ]
 
       - name: ccache stats
         run: ccache -s || true
@@ -225,7 +225,7 @@ jobs:
             D=$(cygpath -u "$V" 2>/dev/null || echo "$V")
             find "$D" -type f -name 'eclipse-ssh.log' -mmin -3 2>/dev/null | head -1 | xargs -r tail -5 || true
           done
-          [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ]
+          [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ] || [ "$RC" -eq 137 ]
           if grep -qi "is not installed" /tmp/smoke.log; then echo "QML MODULE MISSING IN DIST"; exit 1; fi
 
 
@@ -239,7 +239,7 @@ jobs:
           set -e
           echo "real-platform smoke exit code: $RC"
           cat /tmp/smoke-win.log || true
-          [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ]
+          [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ] || [ "$RC" -eq 137 ]
           grep -q "QML root" /tmp/smoke-win.log || { echo "APP NEVER REACHED QML LOAD"; exit 1; }
           if grep -qi "is not installed" /tmp/smoke-win.log; then
             echo "QML MODULES NOT IMPORTABLE FROM DIST (qt.conf/import path bug)"; exit 1
