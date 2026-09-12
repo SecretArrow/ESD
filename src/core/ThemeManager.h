@@ -21,7 +21,10 @@ public:
 
     enum class Mode { System, Light, Dark, Custom };
 
-    void applyFromSettings();
+    Q_PROPERTY(bool isDark READ isDark NOTIFY themeChanged)
+    Q_PROPERTY(QColor accent READ accent NOTIFY accentChanged)
+
+    Q_INVOKABLE void applyFromSettings();
     void setMode(Mode m);
     Mode mode() const { return m_mode; }
     bool isDark() const { return m_dark; }

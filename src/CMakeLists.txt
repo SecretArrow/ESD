@@ -73,6 +73,7 @@ target_link_libraries(eclipse_ssh
     PUBLIC
         eclipse_core
         Qt6::Network
+        Qt6::Qml
         OpenSSL::Crypto
 )
 if(ECLIPSE_WITH_LIBSSH)

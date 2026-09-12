@@ -7,6 +7,7 @@
 
 #include "../common/Utils.h"
 #include "../core/logging/Logger.h"
+#include "../ssh/SshSession.h"
 
 namespace eclipse {
 
@@ -74,6 +75,22 @@ void RemoteFsModel::setSession(qint64 sessionId, std::shared_ptr<ISftpSession> s
     m_sftp = std::move(sftp);
     if (!m_path.isEmpty())
         refresh();
+}
+
+void RemoteFsModel::attachSession(QObject* session)
+{
+    auto* s = qobject_cast<SshSession*>(session);
+    if (!s)
+        return;
+    QString err;
+    std::shared_ptr<ISftpSession> sftp = s->createSftpSession(&err);
+    if (!sftp) {
+        LOG_SFTP_ERR(QStringLiteral("attachSession '%1': %2")
+                         .arg(s->name(),
+                              err.isEmpty() ? QStringLiteral("cannot open SFTP session") : err));
+        return;
+    }
+    setSession(s->sessionId(), std::move(sftp));
 }
 
 void RemoteFsModel::setPath(const QString& p)

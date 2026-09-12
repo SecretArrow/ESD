@@ -4,6 +4,8 @@
 #include <QTimer>
 #include <QVariantMap>
 
+#include <QtQml/QJSValue>
+
 #include "../core/profiles/ConnectionProfile.h"
 #include "SshWorker.h"
 
@@ -59,6 +61,11 @@ public:
     Q_INVOKABLE void decideHostKey(bool accepted, bool trustAndSave);
     Q_INVOKABLE void duplicateSession();
     Q_INVOKABLE void sendToTerminal(const QString& text);   // types into last terminal
+    // QML one-shot exec: runs "command" on its own channel (concurrent calls
+    // allowed; SshWorker::runExec opens a fresh channel per tag) and invokes
+    // the JS callback once, on the main thread, with a single QVariantMap:
+    // { ok: bool, exitCode: int, output: QString }.
+    Q_INVOKABLE void runCommand(const QString& command, const QJSValue& callback);
     std::shared_ptr<ISftpSession> createSftpSession(QString* err);
 
 signals:
@@ -116,6 +123,17 @@ private:
     bool m_lastKeyChanged = false;
 
     int m_lastTerminalCid = -1;
+
+    // runCommand() bookkeeping: one entry per outstanding exec, keyed by the
+    // worker exec tag. Only touched on the main thread (QJSValue is not
+    // thread-safe; execOutput/execFinished are delivered queued to us here).
+    struct PendingExec
+    {
+        QJSValue callback;
+        QByteArray output;
+    };
+    QHash<QByteArray, PendingExec> m_pendingExecs;
+    qint64 m_execTagCounter = 0;
 
     // Reconnect
     QTimer* m_reconnectTimer = nullptr;

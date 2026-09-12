@@ -28,6 +28,10 @@ public:
 
     // Bind to a session; uses a dedicated SFTP session created on demand.
     void setSession(qint64 sessionId, std::shared_ptr<ISftpSession> sftp);
+    // QML entry point: takes the eclipse::SshSession object, creates the
+    // SFTP session internally (std::shared_ptr cannot cross QML), then
+    // forwards to setSession().
+    Q_INVOKABLE void attachSession(QObject* session);
     bool hasSession() const { return bool(m_sftp); }
 
     QString path() const { return m_path; }

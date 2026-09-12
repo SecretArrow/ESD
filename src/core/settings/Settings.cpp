@@ -77,6 +77,10 @@ int Settings::uiFontSize() const
 {
     return m_store.value(QStringLiteral("appearance/uiFontSize"), 10).toInt();
 }
+void Settings::setUiFontSize(int size)
+{
+    setValue(QStringLiteral("appearance/uiFontSize"), size);
+}
 
 QString Settings::terminalFontFamily() const
 {
@@ -142,6 +146,10 @@ QString Settings::credentialStorage() const
 QString Settings::defaultEngine() const
 {
     return m_store.value(QStringLiteral("ssh/defaultEngine"), QStringLiteral("auto")).toString();
+}
+void Settings::setDefaultEngine(const QString& engine)
+{
+    setValue(QStringLiteral("ssh/defaultEngine"), engine);
 }
 bool Settings::debugMode() const
 {

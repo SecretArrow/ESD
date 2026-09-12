@@ -87,13 +87,14 @@ void ShortcutManager::registerAction(const QString& id, const QString& title,
     m_actions.insert(id, { id, title, category, defaultSequence });
 }
 
-QKeySequence ShortcutManager::sequenceFor(const QString& actionId) const
+QString ShortcutManager::sequenceFor(const QString& actionId) const
 {
     const QString ov = m_overrides.value(actionId);
     if (!ov.isEmpty())
-        return QKeySequence(ov);
+        return ov; // overrides are stored in PortableText already
     const auto it = m_actions.constFind(actionId);
-    return it == m_actions.cend() ? QKeySequence() : it->defaultSequence;
+    return it == m_actions.cend() ? QString()
+                                  : it->defaultSequence.toString(QKeySequence::PortableText);
 }
 
 QString ShortcutManager::titleFor(const QString& actionId) const
@@ -101,15 +102,25 @@ QString ShortcutManager::titleFor(const QString& actionId) const
     return m_actions.value(actionId).title;
 }
 
-QVector<ShortcutManager::ActionInfo> ShortcutManager::allActions() const
+QVariantList ShortcutManager::allActions() const
 {
-    QVector<ActionInfo> out;
-    out.reserve(m_actions.size());
+    QVector<ActionInfo> sorted;
+    sorted.reserve(m_actions.size());
     for (const auto& v : m_actions)
-        out.append(v);
-    std::sort(out.begin(), out.end(), [](const ActionInfo& a, const ActionInfo& b) {
+        sorted.append(v);
+    std::sort(sorted.begin(), sorted.end(), [](const ActionInfo& a, const ActionInfo& b) {
         return a.category < b.category || (a.category == b.category && a.title < b.title);
     });
+    QVariantList out;
+    out.reserve(sorted.size());
+    for (const auto& a : sorted) {
+        out.append(QVariantMap {
+            { "id", a.id },
+            { "title", a.title },
+            { "sequence", sequenceFor(a.id) },
+            { "category", a.category },
+        });
+    }
     return out;
 }
 

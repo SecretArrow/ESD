@@ -60,6 +60,7 @@ Dialog {
                 enabled: !dlg.busy; onClicked: dlg.run() }
         }
         ListView {
+            id: resultsList
             Layout.fillWidth: true
             Layout.preferredHeight: 260
             clip: true
@@ -91,11 +92,11 @@ Dialog {
             if (!s) continue;
             const host = s.name;
             resultsModel.append({ host: host, output: "running…", exitCode: -2, sid: sid });
-            s.runCommand(cmdField.text, (out, code) => {
+            s.runCommand(cmdField.text, (res) => {
                 for (let i = 0; i < resultsModel.count; ++i) {
                     if (resultsModel.get(i).sid === sid) {
-                        resultsModel.setProperty(i, "output", out);
-                        resultsModel.setProperty(i, "exitCode", code);
+                        resultsModel.setProperty(i, "output", res.output);
+                        resultsModel.setProperty(i, "exitCode", res.exitCode);
                     }
                 }
                 busy = ids.every(id2 => false) || false;

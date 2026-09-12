@@ -50,7 +50,7 @@ public:
     void wipeSessionSecrets();
 
     // Returns a user-readable description of where secrets are stored.
-    QString storageDescription() const;
+    Q_INVOKABLE QString storageDescription() const;
 
 private:
     CredentialManager() = default;

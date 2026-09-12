@@ -14,7 +14,7 @@ Rectangle {
         if (!session || !session.connected) return;
         session.runCommand(
             "cat /proc/loadavg 2>/dev/null; echo ---; grep -E 'MemTotal|MemAvailable' /proc/meminfo 2>/dev/null; echo ---; df -P -k / 2>/dev/null | tail -1; echo ---; uptime -p 2>/dev/null || uptime; echo ---; nproc",
-            (out, code) => { pane.parse(out) });
+            (res) => { pane.parse(res.output) });
     }
     function parse(out) {
         const parts = out.split("---");

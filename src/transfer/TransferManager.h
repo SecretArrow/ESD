@@ -88,7 +88,7 @@ public:
     Q_INVOKABLE void remove(int row);
     Q_INVOKABLE void clearFinished();
 
-    int count() const { return m_jobs.size(); }
+    Q_INVOKABLE int count() const { return m_jobs.size(); }
     QVector<TransferJob*> jobs() const { return m_jobs; }
 
 signals:

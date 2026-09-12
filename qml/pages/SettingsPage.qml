@@ -191,10 +191,11 @@ Rectangle {
                         Repeater {
                             model: Shortcuts.allActions()
                             delegate: RowLayout {
+                                required property var modelData
                                 Layout.fillWidth: true
-                                Label { text: title; color: Theme.text; Layout.preferredWidth: 240 }
-                                Label { text: category; color: Theme.textMuted; Layout.preferredWidth: 100 }
-                                Label { text: Shortcuts.sequenceFor(id_) !== "" ? Shortcuts.sequenceFor(id_).toString() : "—"
+                                Label { text: modelData.title; color: Theme.text; Layout.preferredWidth: 240 }
+                                Label { text: modelData.category; color: Theme.textMuted; Layout.preferredWidth: 100 }
+                                Label { text: { const s = Shortcuts.sequenceFor(modelData.id); return s !== "" ? s : "—"; }
                                     color: Theme.accent; font.family: "monospace" }
                             }
                         }

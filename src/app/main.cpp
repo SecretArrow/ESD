@@ -21,6 +21,7 @@
 #include "app/AppController.h"
 #include "app/TrayController.h"
 #include "transfer/TransferManager.h"
+#include "sftp/RemoteFsModel.h"
 #include "terminal/TermItem.h"
 #include "ssh/Types.h"
 #include "ssh/SshSession.h"
@@ -115,6 +116,8 @@ int main(int argc, char* argv[])
     qmlRegisterType<TermItem>("Eclipse.Internal", 1, 0, "TermItem");
     qmlRegisterType<SnippetModel>("Eclipse.Internal", 1, 0, "SnippetModel");
     qmlRegisterType<TrayController>("Eclipse.Internal", 1, 0, "QTrayIcon");
+    qmlRegisterType<RemoteFsModel>("Eclipse.Internal", 1, 0, "RemoteFsModel");
+    qmlRegisterType<LocalFsModel>("Eclipse.Internal", 1, 0, "LocalFsModel");
 
     // Pick the Main.qml URL that exists in this build's resources (QFile handles
     // the qrc: scheme; QUrl::toLocalFile() would return an empty string here).

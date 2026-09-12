@@ -22,6 +22,12 @@
 #include "../../../common/Utils.h"
 #include "../../../core/logging/Logger.h"
 
+#if defined(_WIN32) && !defined(S_IFLNK)
+// MinGW-w64's sys/stat.h omits S_IFLNK; libssh reports POSIX-style mode bits,
+// so the value below is the canonical POSIX S_IFLNK.
+#define S_IFLNK 0120000
+#endif
+
 namespace eclipse {
 
 namespace {

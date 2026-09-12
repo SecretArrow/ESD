@@ -18,8 +18,7 @@ Rectangle {
 
     onSessionChanged: {
         if (session && session.connected) {
-            const s = session.createSftpSession();
-            if (s) remoteModel.setSession(session.sessionId, s);
+            remoteModel.attachSession(session); // creates the SFTP session in C++
             const p = profile ? profile : {};
             remoteModel.path = p.sftpDefaultRemoteDir || "/";
         }

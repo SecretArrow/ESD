@@ -15,7 +15,7 @@ class Settings : public QObject
     Q_PROPERTY(QString themeMode READ themeMode WRITE setThemeMode)
     Q_PROPERTY(QString accentColor READ accentColor WRITE setAccentColor)
     Q_PROPERTY(double uiDensity READ uiDensity WRITE setUiDensity)
-    Q_PROPERTY(int uiFontSize READ uiFontSize)
+    Q_PROPERTY(int uiFontSize READ uiFontSize WRITE setUiFontSize)
     Q_PROPERTY(QString terminalFontFamily READ terminalFontFamily WRITE setTerminalFontFamily)
     Q_PROPERTY(int terminalFontSize READ terminalFontSize WRITE setTerminalFontSize)
     Q_PROPERTY(int terminalScrollback READ terminalScrollback WRITE setTerminalScrollback)
@@ -30,6 +30,7 @@ class Settings : public QObject
     Q_PROPERTY(int reconnectRetries READ reconnectRetries WRITE setReconnectRetries)
     Q_PROPERTY(bool debugMode READ debugMode WRITE setDebugMode)
     Q_PROPERTY(QString updateChannel READ updateChannel WRITE setUpdateChannel)
+    Q_PROPERTY(QString defaultEngine READ defaultEngine WRITE setDefaultEngine)
 public:
     static Settings& instance();
 
@@ -64,6 +65,7 @@ public:
     void setUiDensity(double d);
     QString uiFontFamily() const;
     int uiFontSize() const;
+    void setUiFontSize(int size);
 
     // Terminal
     QString terminalFontFamily() const;
@@ -84,6 +86,7 @@ public:
     int reconnectBaseIntervalMs() const;
     QString credentialStorage() const;      // os | session | ask
     QString defaultEngine() const;          // auto | libssh | libssh2
+    void setDefaultEngine(const QString& engine);
     bool debugMode() const;
     QString updateChannel() const;          // stable | beta | nightly
 

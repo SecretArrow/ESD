@@ -93,8 +93,8 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     void append(const Entry& e);
-    void clear();
-    void setFilter(const QString& text, int minLevel, const QString& category);
+    Q_INVOKABLE void clear();
+    Q_INVOKABLE void setFilter(const QString& text, int minLevel, const QString& category);
     QVector<Entry> entriesForExport() const;
 
 private:

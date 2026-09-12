@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QKeySequence>
 #include <QObject>
+#include <QVariant>
 
 namespace eclipse {
 
@@ -25,9 +26,12 @@ public:
 
     void registerAction(const QString& id, const QString& title, const QString& category,
                         const QKeySequence& defaultSequence);
-    QKeySequence sequenceFor(const QString& actionId) const;
+    // PortableText reads best on the Windows/Linux targets and round-trips
+    // through QML Shortcut.sequence (which parses PortableText strings).
+    Q_INVOKABLE QString sequenceFor(const QString& actionId) const;
     QString titleFor(const QString& actionId) const;
-    QVector<ActionInfo> allActions() const;
+    // One QVariantMap per action: { id, title, sequence, category }.
+    Q_INVOKABLE QVariantList allActions() const;
     void setOverride(const QString& actionId, const QKeySequence& seq); // empty clears
     void resetAll();
 

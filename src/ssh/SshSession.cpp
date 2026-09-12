@@ -2,6 +2,8 @@
 
 #include <QThread>
 
+#include <QtQml>
+
 #include "../core/logging/Logger.h"
 #include "../core/profiles/ProfileStore.h"
 #include "../core/settings/Settings.h"
@@ -9,6 +11,31 @@
 #include "HostKeyManager.h"
 
 namespace eclipse {
+
+namespace {
+
+// Hard cap for runCommand() collected output (protects QML from runaway output).
+constexpr int kMaxRunOutputBytes = 1024 * 1024;
+
+// Qt 6 removed QJSValue::engine(), and the callback's own engine is not
+// reachable from C++. A process-local engine materializes the result
+// QVariantMap as a JS object; QJSValue converts values across engine
+// boundaries when the QML-created callback is invoked.
+QJSEngine& runCommandScriptEngine()
+{
+    static QJSEngine engine;
+    return engine;
+}
+
+void invokeExecCallback(const QJSValue& callback, const QVariantMap& result)
+{
+    if (!callback.isCallable())
+        return;
+    const QJSValue arg = runCommandScriptEngine().toScriptValue(result);
+    callback.call(QJSValueList { arg });
+}
+
+} // namespace
 
 qint64 SshSession::s_nextId = 1;
 
@@ -22,6 +49,32 @@ SshSession::SshSession(ConnectionProfile profile, QObject* parent)
     m_reconnectTimer->setSingleShot(true);
     connect(m_reconnectTimer, &QTimer::timeout, this, &SshSession::tryReconnect);
     connect(this, &SshSession::terminalOpened, this, &SshSession::trackTerminal);
+
+    // runCommand() plumbing: worker signals arrive here queued (main thread),
+    // so the lambdas below - and the QJSValue callbacks they invoke - never
+    // run off the UI thread.
+    connect(this, &SshSession::execOutput, this,
+            [this](const QByteArray& tag, const QByteArray& data, bool isStderr) {
+        const auto it = m_pendingExecs.find(tag);
+        if (it == m_pendingExecs.end())
+            return;
+        if (it->output.size() < kMaxRunOutputBytes)
+            it->output += data.left(kMaxRunOutputBytes - it->output.size());
+        Q_UNUSED(isStderr); // stderr is interleaved after stdout (stdout-only consumers silence it)
+    });
+    connect(this, &SshSession::execFinished, this, [this](const QByteArray& tag, int exitCode) {
+        const auto it = m_pendingExecs.find(tag);
+        if (it == m_pendingExecs.end())
+            return;
+        const PendingExec pending = it.value();
+        m_pendingExecs.erase(it);
+        // Complete result only: ok=false when the exec never started (-1).
+        invokeExecCallback(pending.callback, QVariantMap {
+            { "ok", exitCode >= 0 },
+            { "exitCode", exitCode },
+            { "output", QString::fromUtf8(pending.output) },
+        });
+    });
 }
 
 SshSession::~SshSession()
@@ -143,6 +196,31 @@ void SshSession::sendToTerminal(const QString& text)
     }
 }
 
+void SshSession::runCommand(const QString& command, const QJSValue& callback)
+{
+    if (!callback.isCallable())
+        return;
+
+    if (!isConnected() || !m_worker) {
+        // Caller is QML on the main thread: immediate invocation is safe.
+        invokeExecCallback(callback, QVariantMap {
+            { "ok", false },
+            { "exitCode", -1 },
+            { "output", QString() },
+        });
+        return;
+    }
+
+    const QByteArray tag = "run-" + QByteArray::number(++m_execTagCounter);
+    PendingExec pending;
+    pending.callback = callback;
+    m_pendingExecs.insert(tag, pending);
+
+    QMetaObject::invokeMethod(m_worker,
+                              [w = m_worker, tag, command]() { w->runExec(tag, command); },
+                              Qt::QueuedConnection);
+}
+
 std::shared_ptr<ISftpSession> SshSession::createSftpSession(QString* err)
 {
     return m_worker ? m_worker->createSftpSession(err) : nullptr;
@@ -218,6 +296,19 @@ void SshSession::onDisconnected(const QString& reason, bool byRequest)
     m_state = SessionState::Disconnected;
     emit stateChanged(stateName());
     emit disconnected(reason, byRequest);
+
+    // Worker teardown clears exec channels without emitting execFinished, so
+    // outstanding runCommand() callbacks would never fire - fail them now
+    // (we are on the main thread; QJSValue use stays single-threaded).
+    const QHash<QByteArray, PendingExec> pendingExecs = m_pendingExecs;
+    m_pendingExecs.clear();
+    for (const PendingExec& pe : pendingExecs) {
+        invokeExecCallback(pe.callback, QVariantMap {
+            { "ok", false },
+            { "exitCode", -1 },
+            { "output", QString() },
+        });
+    }
 
     const bool mayReconnect = !byRequest && m_profile.autoReconnect
                               && Settings::instance().autoReconnect();
