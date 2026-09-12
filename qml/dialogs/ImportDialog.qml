@@ -3,6 +3,10 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
 
+// Module import: gives access to the Theme singleton (same-module types in
+// subdirectories are not visible without it - binding errors otherwise).
+import Eclipse
+
 // Import / export center: PuTTY sessions, OpenSSH known_hosts and encrypted
 // profile bundles. Calls AppController invokables (exposed to QML as the
 // "App" context property, like every other dialog in qml/dialogs):

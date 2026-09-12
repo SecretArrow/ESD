@@ -192,7 +192,7 @@ ApplicationWindow {
                         Component.onCompleted: reload()
                         function reload() {
                             connModel.clear();
-                            const all = App.profiles.all();
+                            const all = App.profiles.allProfiles();
                             const q = searchField.text.toLowerCase();
                             const favorites = [];
                             const others = [];

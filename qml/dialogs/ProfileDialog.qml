@@ -3,6 +3,10 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
 
+// Module import: gives access to the Theme singleton (same-module types in
+// subdirectories are not visible without it - binding errors otherwise).
+import Eclipse
+
 // Connection editor with progressive disclosure (Basic / Advanced).
 Dialog {
     id: dlg

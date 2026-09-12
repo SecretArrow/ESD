@@ -196,6 +196,22 @@ int ProfileStore::count() const
     return q.next() ? q.value(0).toInt() : 0;
 }
 
+QVariantList ProfileStore::allProfiles() const
+{
+    QVariantList out;
+    const auto profiles = all();
+    out.reserve(profiles.size());
+    for (const auto& p : profiles)
+        out.append(p.toVariantMap());
+    return out;
+}
+
+QVariantMap ProfileStore::profileById(qint64 id) const
+{
+    const ConnectionProfile p = get(id);
+    return p.id > 0 ? p.toVariantMap() : QVariantMap{};
+}
+
 // ---------------------------------------------------------------------------
 // Export / import ------------------------------------------------------------
 QString ProfileStore::exportToJson(const QString& path, bool) const

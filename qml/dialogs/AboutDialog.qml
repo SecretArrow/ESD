@@ -2,6 +2,10 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+// Module import: gives access to the Theme singleton (same-module types in
+// subdirectories are not visible without it - binding errors otherwise).
+import Eclipse
+
 Dialog {
     title: qsTr("About")
     modal: true

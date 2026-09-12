@@ -51,6 +51,12 @@ rm -f "$STAGE"/sqldrivers/qsqlibase.dll "$STAGE"/sqldrivers/qsqlmysql.dll \
 # already staged and not a system DLL gets copied from the MSYS2 prefix.
 # Repeat until a full pass copies nothing new (transitive dependencies).
 stage_or_system() { # $1 = dll file name (case-insensitive FS)
+  case "$1" in
+    # Windows API sets (api-ms-*) / minimal services (ext-ms-*): virtual
+    # library names resolved by the OS loader itself, they are NOT physical
+    # files on disk, so [ -e ] checks must not apply to them.
+    api-ms-*|ext-ms-*) return 0 ;;
+  esac
   [ -e "$STAGE/$1" ] && return 0
   [ -e "$SYS32/$1" ] && return 0
   return 1

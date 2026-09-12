@@ -33,8 +33,10 @@ export QML_SOURCES_PATHS="$ROOT/qml"
 # NOTE: linuxdeploy-plugin-qt reads EXTRA_QT_PLUGINS (not *_MODULES).
 # sql = sqlite driver; imageformats = extra format plugins beyond defaults.
 export EXTRA_QT_PLUGINS="sql;imageformats"
+# linuxdeploy has no --outdir flag (that is linuxdeployqt); the AppImage
+# output plugin takes the destination from the OUTPUT environment variable.
+export OUTPUT="$DIST/Eclipse-SSH-Desktop-$VERSION-x86_64.AppImage"
 linuxdeploy --appdir "$APPDIR" --plugin qt --output appimage \
     --icon-file "$APPDIR/usr/share/icons/hicolor/256x256/apps/eclipse-ssh-desktop.png" \
-    --desktop-file "$APPDIR/usr/share/applications/eclipse-ssh-desktop.desktop" \
-    --outdir "$DIST"
-echo "AppImage: $DIST/Eclipse-SSH-Desktop-$VERSION-x86_64.AppImage"
+    --desktop-file "$APPDIR/usr/share/applications/eclipse-ssh-desktop.desktop"
+echo "AppImage: $OUTPUT"

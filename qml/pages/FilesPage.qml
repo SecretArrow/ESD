@@ -14,7 +14,7 @@ Rectangle {
     LocalFsModel { id: localModel }
     RemoteFsModel { id: remoteModel }
 
-    property var profile: session ? App.profiles.get(session.profileId) : null
+    property var profile: session ? App.profiles.profileById(session.profileId) : null
 
     onSessionChanged: {
         if (session && session.connected) {

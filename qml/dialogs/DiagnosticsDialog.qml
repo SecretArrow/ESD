@@ -2,6 +2,10 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+// Module import: gives access to the Theme singleton (same-module types in
+// subdirectories are not visible without it - binding errors otherwise).
+import Eclipse
+
 Dialog {
     id: dlg
     property int profileId: 0
@@ -36,8 +40,8 @@ Dialog {
         ComboBox {
             id: profileBox
             Layout.fillWidth: true
-            model: App.profiles.all().map(p => p.name)
-            onActivated: (i) => { dlg.profileId = App.profiles.all()[i].id; stepsModel.clear(); App.runDiagnostics(dlg.profileId, "") }
+            model: App.profiles.allProfiles().map(p => p.name)
+            onActivated: (i) => { dlg.profileId = App.profiles.allProfiles()[i].id; stepsModel.clear(); App.runDiagnostics(dlg.profileId, "") }
         }
         ListView {
             Layout.fillWidth: true

@@ -56,7 +56,7 @@ Rectangle {
                     Component.onCompleted: reload()
                     function reload() {
                         recentModel.clear();
-                        const all = App.profiles.all();
+                        const all = App.profiles.allProfiles();
                         all.sort((a, b) => (b.favorite - a.favorite) || (b.lastUsedMs - a.lastUsedMs));
                         for (let i = 0; i < Math.min(8, all.length); ++i) {
                             const p = all[i];
