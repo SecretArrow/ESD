@@ -95,7 +95,7 @@ void VtEmulator::feed(const char* data, size_t len)
 
         // Pass 1: byte-stream scan (state survives across feed() calls).
         for (size_t i = 0; i < len; ++i)
-            scanByte(unsigned char(data[i]), i, events);
+            scanByte(static_cast<unsigned char>(data[i]), i, events);
 
         // Pass 2: forward everything to libvterm, applying marks at the
         // right moments. libvterm ignores unknown OSC and DCS strings, so
