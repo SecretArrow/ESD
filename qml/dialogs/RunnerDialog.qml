@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Eclipse.Internal 1.0
 
 // Command Runner: run a command on multiple connected servers at once.
 Dialog {

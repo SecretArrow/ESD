@@ -3,7 +3,7 @@
 // Windows Credential Manager backend (DPAPI-backed).
 // Only compiled on Windows; declared unconditionally so project file lists
 // stay stable across platforms.
-#ifdef Q_OS_WIN
+#ifdef _WIN32
 
 #include "../CredentialBackends.h"
 
