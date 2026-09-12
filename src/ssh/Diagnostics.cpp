@@ -10,8 +10,22 @@
 #include "HostKeyManager.h"
 #include "ProxyDialer.h"
 #include "backends/libssh/LibsshEngine.h"
+#include "backends/libssh2/Libssh2Engine.h"
 
 namespace eclipse {
+
+namespace {
+
+// Post-quantum KEX detection: OpenSSH/libssh hybrid names carry the PQ
+// primitive in the algorithm name (sntrup761x25519@openssh.com,
+// mlkem768x25519-sha256, ...).
+bool isPostQuantumKex(const QString& kex)
+{
+    const QString k = kex.toLower();
+    return k.contains(QLatin1String("sntrup")) || k.contains(QLatin1String("mlkem"));
+}
+
+} // namespace
 
 Diagnostics::Diagnostics(ConnectionProfile profile, const QString& password, QObject* parent)
     : QObject(parent)
@@ -67,7 +81,13 @@ void Diagnostics::start()
 
     // --- SSH handshake -----------------------------------------------------
     t.restart();
-    std::unique_ptr<ISshEngine> engine = createEngine(SshEngineKind::Libssh);
+    SshEngineKind engineKind = SshEngineKind::Libssh;
+    if (m_profile.engine == QLatin1String("libssh2"))
+        engineKind = SshEngineKind::Libssh2;
+    std::unique_ptr<ISshEngine> engine = createEngine(engineKind);
+    // Apply the profile KEX preference so diagnostics reflect real sessions.
+    if (!m_profile.kexAlgorithms.isEmpty())
+        engine->setKexAlgorithms(m_profile.kexAlgorithms);
     const Outcome hs = engine->connectOverFd(fd, m_profile.host, m_profile.port, {});
     emit stepFinished(QStringLiteral("SSH Handshake"), hs.ok,
                       hs.ok ? QStringLiteral("Negotiated with %1 (%2)")
@@ -78,6 +98,25 @@ void Diagnostics::start()
     if (!hs.ok) {
         emit finished(false, int(total.elapsed()));
         return;
+    }
+
+    // --- Key exchange summary (post-quantum readiness) ---------------------
+    {
+        const EngineInfo info = engine->negotiatedInfo();
+        // Engines that cannot report the negotiated KEX leave it empty; we
+        // surface "unknown" and say so honestly instead of guessing.
+        const QString kex = info.kex.isEmpty() ? QStringLiteral("unknown") : info.kex;
+        const bool pq = kex != QLatin1String("unknown") && isPostQuantumKex(kex);
+        const QString note = pq
+            ? QStringLiteral("Connected with a post-quantum hybrid key exchange (%1)").arg(kex)
+            : (kex == QLatin1String("unknown")
+                ? QStringLiteral("This engine build cannot report the negotiated key exchange")
+                : QStringLiteral("Connected with classical key exchange - server does not "
+                                 "support post-quantum KEX (mlkem768x25519 / sntrup761)"));
+        emit keyExchangeInfo(kex, pq, note);
+        LOG_APP(QStringLiteral("Diagnostics %1: kex=%2 cipherIn=%3 cipherOut=%4 macIn=%5 macOut=%6 hostkey=%7")
+                    .arg(m_profile.host, kex, info.cipherIn, info.cipherOut,
+                         info.macIn, info.macOut, info.hostKeyAlgo));
     }
 
     // --- Host key ----------------------------------------------------------

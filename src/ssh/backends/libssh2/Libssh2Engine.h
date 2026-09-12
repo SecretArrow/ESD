@@ -23,7 +23,9 @@
 #include <mutex>
 
 #include <QMap>
+#include <QMutex>
 #include <QString>
+#include <QVector>
 
 #include <libssh2.h>
 #include <libssh2_sftp.h>
@@ -50,6 +52,7 @@ public:
 
     Outcome openShell(int cols, int rows, const QStringList& env) override;
     Outcome openExecChannel(const QString& command) override;
+    Outcome requestX11(int screenNumber, const QString& authCookie, QString* err) override;
 
     // Non-blocking reads; return -1 on error, 0 when nothing available.
     int readStdout(char* buf, int len) override;
@@ -197,6 +200,19 @@ public:
 
     void setPreferredAuthOrder(bool agentFirst) override;
 
+    void setKexAlgorithms(const QString& list) override;
+
+    // X11: libssh2 has no polling accept call for inbound X11 channels; they
+    // are delivered through the LIBSSH2_CALLBACK_X11 callback (libssh2.h:399,
+    // signature macro LIBSSH2_X11_OPEN_FUNC, libssh2.h:360) which fires while
+    // the pump thread processes packets. The callback enqueues the opened
+    // channel here and acceptX11() drains the queue.
+    std::unique_ptr<IChannel> acceptX11(int timeoutMs, QString* err) override;
+
+    // Called by the static LIBSSH2_CALLBACK_X11 trampoline (file scope in the
+    // .cpp); public so the trampoline can reach it. Not part of ISshEngine.
+    void enqueueX11Channel(LIBSSH2_CHANNEL* channel);
+
     // Backend extensions beyond ISshEngine (the generic interface only exposes
     // openChannel(), which produces an interactive shell channel). The worker
     // can use these through the concrete type when needed:
@@ -218,7 +234,13 @@ private:
 
     Libssh2StatePtr m_state;
     QString m_hostForLog;
+    QString m_kexPreference;
     bool m_agentFirst = true;
+
+    // Inbound X11 channel queue (fed by the LIBSSH2_CALLBACK_X11 trampoline,
+    // which runs on the pump thread inside libssh2 packet processing).
+    QMutex m_x11Mutex;
+    QVector<LIBSSH2_CHANNEL*> m_x11Pending;
 };
 
 } // namespace eclipse

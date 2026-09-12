@@ -64,6 +64,7 @@ QVariantMap ConnectionProfile::toVariantMap() const
         { "group", group },
         { "tags", tags },
         { "favorite", favorite },
+        { "connectionType", connectionType },
         { "host", host },
         { "port", port },
         { "username", username },
@@ -82,6 +83,7 @@ ConnectionProfile ConnectionProfile::fromVariantMap(const QVariantMap& m)
     p.group = m.value(QStringLiteral("group")).toString();
     p.tags = m.value(QStringLiteral("tags")).toStringList();
     p.favorite = m.value(QStringLiteral("favorite")).toBool();
+    p.connectionType = toStrD(m.value(QStringLiteral("connectionType")), QStringLiteral("ssh"));
     p.host = m.value(QStringLiteral("host")).toString();
     p.port = toIntD(m.value(QStringLiteral("port")), 22);
     p.username = m.value(QStringLiteral("username")).toString();
@@ -99,6 +101,16 @@ QJsonObject ConnectionProfile::extraJson() const
         rules.append(r.toJson());
 
     QJsonObject o;
+    o.insert(QStringLiteral("connectionType"), connectionType);
+    o.insert(QStringLiteral("kexAlgorithms"), kexAlgorithms);
+    o.insert(QStringLiteral("x11Forward"), x11Forward);
+    o.insert(QStringLiteral("x11Screen"), x11Screen);
+    o.insert(QStringLiteral("serialPort"), serialPort);
+    o.insert(QStringLiteral("serialBaud"), serialBaud);
+    o.insert(QStringLiteral("serialDataBits"), serialDataBits);
+    o.insert(QStringLiteral("serialParity"), serialParity);
+    o.insert(QStringLiteral("serialStopBits"), serialStopBits);
+    o.insert(QStringLiteral("serialFlowControl"), serialFlowControl);
     o.insert(QStringLiteral("proxyType"), proxyType);
     o.insert(QStringLiteral("proxyHost"), proxyHost);
     o.insert(QStringLiteral("proxyPort"), proxyPort);
@@ -125,6 +137,20 @@ QJsonObject ConnectionProfile::extraJson() const
 
 void ConnectionProfile::applyExtraJson(const QJsonObject& o)
 {
+    connectionType = toStrD(o.value(QStringLiteral("connectionType")), QStringLiteral("ssh"));
+    kexAlgorithms = o.value(QStringLiteral("kexAlgorithms")).toString();
+    x11Forward = o.value(QStringLiteral("x11Forward")).toBool(false);
+    x11Screen = toIntD(o.value(QStringLiteral("x11Screen")), 0);
+    serialPort = o.value(QStringLiteral("serialPort")).toString();
+    serialBaud = toIntD(o.value(QStringLiteral("serialBaud")), 115200);
+    if (serialBaud <= 0)
+        serialBaud = 115200;
+    serialDataBits = toIntD(o.value(QStringLiteral("serialDataBits")), 8);
+    serialParity = toStrD(o.value(QStringLiteral("serialParity")), QStringLiteral("none"));
+    serialStopBits = toIntD(o.value(QStringLiteral("serialStopBits")), 1);
+    if (serialStopBits != 2)
+        serialStopBits = 1;
+    serialFlowControl = toIntD(o.value(QStringLiteral("serialFlowControl")), 0);
     proxyType = toStrD(o.value(QStringLiteral("proxyType")), QStringLiteral("none"));
     proxyHost = o.value(QStringLiteral("proxyHost")).toString();
     proxyPort = o.value(QStringLiteral("proxyPort")).toInt();

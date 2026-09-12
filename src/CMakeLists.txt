@@ -16,6 +16,8 @@ add_library(eclipse_core STATIC
     core/settings/Settings.cpp
     core/profiles/ConnectionProfile.cpp
     core/profiles/ProfileStore.cpp
+    core/profiles/PuttyImporter.cpp
+    core/profiles/ProfileBundle.cpp
     core/credentials/CredentialBackends.cpp
     core/credentials/CredentialManager.cpp
     core/shortcuts/ShortcutManager.cpp
@@ -114,6 +116,7 @@ eclipse_set_target_warnings(eclipse_transfer)
 add_library(eclipse_terminal STATIC
     terminal/VtEmulator.cpp
     terminal/TermItem.cpp
+    terminal/SixelDecoder.cpp
 )
 target_link_libraries(eclipse_terminal
     PUBLIC
@@ -176,6 +179,8 @@ set(ECLIPSE_QML_FILES
     ${CMAKE_SOURCE_DIR}/qml/dialogs/AboutDialog.qml
     ${CMAKE_SOURCE_DIR}/qml/dialogs/TransferPanel.qml
     ${CMAKE_SOURCE_DIR}/qml/dialogs/ArchiveViewerDialog.qml
+    ${CMAKE_SOURCE_DIR}/qml/dialogs/ImportDialog.qml
+    ${CMAKE_SOURCE_DIR}/qml/components/TerminalFindBar.qml
     ${CMAKE_SOURCE_DIR}/qml/pages/MonitorPane.qml
 )
 
@@ -185,6 +190,10 @@ qt_add_executable(eclipse-ssh-desktop WIN32
     app/AppController.cpp
     app/TrayController.h
     app/TrayController.cpp
+    net/TelnetSession.h
+    net/TelnetSession.cpp
+    net/SerialSession.h
+    net/SerialSession.cpp
 )
 
 qt_add_qml_module(eclipse-ssh-desktop
@@ -206,7 +215,16 @@ target_link_libraries(eclipse-ssh-desktop PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Widgets
+    Qt6::Network
 )
+
+# Optional serial console support (Qt6::SerialPort found in the root
+# CMakeLists via OPTIONAL_COMPONENTS). When absent, SerialSession falls back
+# to its compile-time stub with an identical API.
+if(TARGET Qt6::SerialPort)
+    target_link_libraries(eclipse-ssh-desktop PRIVATE Qt6::SerialPort)
+    target_compile_definitions(eclipse-ssh-desktop PRIVATE ECLIPSE_HAVE_SERIALPORT)
+endif()
 set_source_files_properties(${CMAKE_SOURCE_DIR}/resources/appicon.png PROPERTIES
     QT_RESOURCE_ALIAS "appicon.png")
 qt_add_resources(eclipse-ssh-desktop "icons"

@@ -151,6 +151,22 @@ void Settings::setDefaultEngine(const QString& engine)
 {
     setValue(QStringLiteral("ssh/defaultEngine"), engine);
 }
+
+QString Settings::profilesSyncFolder() const
+{
+    return m_store.value(QStringLiteral("profiles/syncFolder"), QString()).toString();
+}
+
+void Settings::setProfilesSyncFolder(const QString& folder)
+{
+    // Store with forward slashes so bundles/settings stay portable across OSes.
+    const QString normalized = QDir::fromNativeSeparators(folder.trimmed());
+    if (profilesSyncFolder() == normalized)
+        return; // mirrors setValue()'s no-op-on-unchanged behavior
+    setValue(QStringLiteral("profiles/syncFolder"), normalized);
+    emit profilesSyncFolderChanged();
+}
+
 bool Settings::debugMode() const
 {
     return m_store.value(QStringLiteral("advanced/debugMode"), false).toBool();

@@ -3,9 +3,12 @@
 #include <QClipboard>
 #include <QThread>
 #include <QGuiApplication>
+#include <QtQml>
 #include <EclipseVersion.h>
 
 #include "../archive/Archive.h"
+#include "../net/SerialSession.h"
+#include "../net/TelnetSession.h"
 
 #include <QApplication>
 #include <QDateTime>
@@ -22,6 +25,19 @@
 #include "../ssh/HostKeyManager.h"
 #include "../ssh/backends/libssh/LibsshEngine.h"
 #include "../ssh/backends/libssh2/Libssh2Engine.h"
+
+// Agent 2-b backend contracts (src/core/profiles/PuttyImporter.h,
+// src/core/profiles/ProfileBundle.h). The files may not exist yet in every
+// build; __has_include keeps the app compiling and the call sites degrade to
+// an error map until the integrator lands the backend.
+#if __has_include("../core/profiles/PuttyImporter.h")
+#include "../core/profiles/PuttyImporter.h"
+#define ECLIPSE_HAVE_PUTTY_IMPORTER 1
+#endif
+#if __has_include("../core/profiles/ProfileBundle.h")
+#include "../core/profiles/ProfileBundle.h"
+#define ECLIPSE_HAVE_PROFILE_BUNDLE 1
+#endif
 
 namespace eclipse {
 
@@ -172,6 +188,16 @@ ProfileDraft* ProfileDraft::fromProfile(const ConnectionProfile& p)
     d->sftpDefaultRemoteDir = p.sftpDefaultRemoteDir;
     d->sftpDefaultLocalDir = p.sftpDefaultLocalDir;
     d->transferProtocol = p.transferProtocol;
+    d->connectionType = p.connectionType;
+    d->kexAlgorithms = p.kexAlgorithms;
+    d->x11Forward = p.x11Forward;
+    d->x11Screen = p.x11Screen;
+    d->serialPort = p.serialPort;
+    d->serialBaud = p.serialBaud;
+    d->serialDataBits = p.serialDataBits;
+    d->serialParity = p.serialParity;
+    d->serialStopBits = p.serialStopBits;
+    d->serialFlowControl = p.serialFlowControl;
     for (const auto& r : p.forwardingRules) {
         d->forwardingRules.append(QVariantMap {
             { "id", r.id },
@@ -220,6 +246,16 @@ ConnectionProfile ProfileDraft::toProfile() const
     p.sftpDefaultRemoteDir = sftpDefaultRemoteDir;
     p.sftpDefaultLocalDir = sftpDefaultLocalDir;
     p.transferProtocol = transferProtocol;
+    p.connectionType = connectionType;
+    p.kexAlgorithms = kexAlgorithms;
+    p.x11Forward = x11Forward;
+    p.x11Screen = x11Screen;
+    p.serialPort = serialPort;
+    p.serialBaud = serialBaud;
+    p.serialDataBits = serialDataBits;
+    p.serialParity = serialParity;
+    p.serialStopBits = serialStopBits;
+    p.serialFlowControl = serialFlowControl;
     p.forwardingRules.clear();
     for (const auto& v : forwardingRules) {
         const QVariantMap m = v.toMap();
@@ -263,6 +299,12 @@ AppController* AppController::create(QQmlEngine*, QJSEngine*)
 AppController::AppController(QObject* parent)
     : QObject(parent)
 {
+    // QML type registration for the console session classes (Task 2-c).
+    // Same import URI used by the other app types (see main.cpp:
+    // qmlRegisterType<TermItem>("Eclipse.Internal", 1, 0, ...)).
+    qmlRegisterType<TelnetSession>("Eclipse.Internal", 1, 0, "TelnetSession");
+    qmlRegisterType<SerialSession>("Eclipse.Internal", 1, 0, "SerialSession");
+
     Database::instance().open();
     ProfileStore::instance().init();
     SnippetStore::instance().init();
@@ -421,6 +463,90 @@ SshSession* AppController::session(qint64 sessionId) const
     return SessionManager::instance().sessionById(sessionId);
 }
 
+// ---- console (Telnet/Serial) sessions ---------------------------------------
+QObject* AppController::openConsoleSession(const QVariantMap& map)
+{
+    // Either a stored profile id or explicit fields (quick console).
+    ConnectionProfile p;
+    const qint64 profileId = qlonglong(map.value(QStringLiteral("profileId")).toLongLong());
+    if (profileId > 0)
+        p = ProfileStore::instance().get(profileId);
+    if (map.contains(QStringLiteral("connectionType")))
+        p.connectionType = map.value(QStringLiteral("connectionType")).toString();
+    if (map.contains(QStringLiteral("name")))
+        p.name = map.value(QStringLiteral("name")).toString();
+    if (map.contains(QStringLiteral("host")))
+        p.host = map.value(QStringLiteral("host")).toString();
+    if (map.contains(QStringLiteral("port")))
+        p.port = map.value(QStringLiteral("port")).toInt();
+    if (map.contains(QStringLiteral("serialPort")))
+        p.serialPort = map.value(QStringLiteral("serialPort")).toString();
+    if (map.contains(QStringLiteral("serialBaud")))
+        p.serialBaud = map.value(QStringLiteral("serialBaud")).toInt();
+    if (map.contains(QStringLiteral("serialDataBits")))
+        p.serialDataBits = map.value(QStringLiteral("serialDataBits")).toInt();
+    if (map.contains(QStringLiteral("serialParity")))
+        p.serialParity = map.value(QStringLiteral("serialParity")).toString();
+    if (map.contains(QStringLiteral("serialStopBits")))
+        p.serialStopBits = map.value(QStringLiteral("serialStopBits")).toInt();
+    if (map.contains(QStringLiteral("serialFlowControl")))
+        p.serialFlowControl = map.value(QStringLiteral("serialFlowControl")).toInt();
+
+    if (p.connectionType != QLatin1String("telnet") && p.connectionType != QLatin1String("serial")) {
+        LOG_WARN(QStringLiteral("openConsoleSession: unsupported connectionType '%1'").arg(p.connectionType));
+        return nullptr;
+    }
+    if (p.host.isEmpty() && p.serialPort.isEmpty()) {
+        LOG_WARN(QStringLiteral("openConsoleSession: no host or serial device given"));
+        return nullptr;
+    }
+    if (p.connectionType == QLatin1String("telnet") && p.port <= 0)
+        p.port = 23;
+
+    const qint64 sessionId = m_nextConsoleSessionId++;
+    QObject* session = nullptr;
+    if (p.connectionType == QLatin1String("telnet")) {
+        auto* telnet = new TelnetSession(this);
+        telnet->connectToProfile(QVariantMap {
+            { "host", p.host },
+            { "port", p.port },
+            { "name", p.label() },
+        });
+        session = telnet;
+    } else {
+        auto* serial = new SerialSession(this);
+        serial->connectToProfile(QVariantMap {
+            { "serialPort", p.serialPort },
+            { "serialBaud", p.serialBaud },
+            { "serialDataBits", p.serialDataBits },
+            { "serialParity", p.serialParity },
+            { "serialStopBits", p.serialStopBits },
+            { "serialFlowControl", p.serialFlowControl },
+            { "name", p.label() },
+        });
+        session = serial;
+    }
+
+    m_consoleSessions.insert(sessionId, session);
+    connect(session, &QObject::destroyed, this, [this, sessionId]() {
+        m_consoleSessions.remove(sessionId);
+    });
+    LOG_CONN(QStringLiteral("Console session %1 opened (%2 %3)")
+                 .arg(sessionId).arg(p.connectionType, p.label()));
+    return session;
+}
+
+void AppController::closeConsoleSession(qint64 sessionId)
+{
+    if (QObject* s = m_consoleSessions.take(sessionId))
+        s->deleteLater();
+}
+
+QObject* AppController::consoleSession(qint64 sessionId) const
+{
+    return m_consoleSessions.value(sessionId, nullptr);
+}
+
 void AppController::wireSession(SshSession* session)
 {
     connect(session, &SshSession::hostKeyNeeded, this,
@@ -489,6 +615,112 @@ QString AppController::backupProfiles(const QString& path)
 QString AppController::restoreBackup(const QString& path)
 {
     return ProfileStore::instance().restoreFromFile(path);
+}
+
+// ---- import/sync (agent 2-b API contracts) ------------------------------------
+namespace {
+
+QVariantMap importResult(bool ok, int imported, int skipped, const QString& error)
+{
+    return {
+        { "ok", ok },
+        { "imported", imported },
+        { "skipped", skipped },
+        { "error", error },
+    };
+}
+
+} // namespace
+
+QVariantMap AppController::importPuttySessions()
+{
+#ifdef ECLIPSE_HAVE_PUTTY_IMPORTER
+    // Contract (agent 2-b): static QVector<ConnectionProfile>
+    // PuttyImporter::importFromWindowsRegistry(QString* errorOut).
+    QString err;
+    const QVector<ConnectionProfile> imported = PuttyImporter::importFromWindowsRegistry(&err);
+    int added = 0;
+    int skipped = 0;
+    for (const ConnectionProfile& p : imported) {
+        if (p.host.isEmpty()) {
+            ++skipped;
+            continue;
+        }
+        if (ProfileStore::instance().add(p) > 0)
+            ++added;
+        else
+            ++skipped;
+    }
+    LOG_APP(QStringLiteral("PuTTY import: %1 added, %2 skipped%3")
+                .arg(added).arg(skipped)
+                .arg(err.isEmpty() ? QString() : QStringLiteral(" - ") + err));
+    return importResult(err.isEmpty(), added, skipped, err);
+#else
+    LOG_WARN(QStringLiteral("PuTTY import requested but PuttyImporter is not available yet"));
+    return importResult(false, 0, 0,
+                        QStringLiteral("PuTTY import backend is not available in this build (PuttyImporter missing)."));
+#endif
+}
+
+QVariantMap AppController::exportProfileBundle(const QUrl& fileUrl, const QString& passphrase)
+{
+    const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
+#ifdef ECLIPSE_HAVE_PROFILE_BUNDLE
+    // Contract (agent 2-b): static QString ProfileBundle::exportBundle(
+    //   const QVector<ConnectionProfile>& profiles, const QString& path,
+    //   const QString& passphrase);  empty QString = success.
+    const QString err = ProfileBundle::exportBundle(ProfileStore::instance().all(), path, passphrase);
+    return importResult(err.isEmpty(), err.isEmpty() ? ProfileStore::instance().count() : 0, 0, err);
+#else
+    LOG_WARN(QStringLiteral("Profile bundle export requested but ProfileBundle is not available yet"));
+    return importResult(false, 0, 0,
+                        QStringLiteral("Profile bundle backend is not available in this build (ProfileBundle missing)."));
+#endif
+}
+
+QVariantMap AppController::importProfileBundle(const QUrl& fileUrl, const QString& passphrase)
+{
+    const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
+#ifdef ECLIPSE_HAVE_PROFILE_BUNDLE
+    // Contract (agent 2-b): static QVector<ConnectionProfile>
+    // ProfileBundle::importBundle(const QString& path, const QString& passphrase,
+    //                             QString* errorOut).
+    QString err;
+    const QVector<ConnectionProfile> imported = ProfileBundle::importBundle(path, passphrase, &err);
+    int added = 0;
+    int skipped = 0;
+    for (const ConnectionProfile& p : imported) {
+        if (p.host.isEmpty()) {
+            ++skipped;
+            continue;
+        }
+        if (ProfileStore::instance().add(p) > 0)
+            ++added;
+        else
+            ++skipped;
+    }
+    return importResult(err.isEmpty(), added, skipped, err);
+#else
+    LOG_WARN(QStringLiteral("Profile bundle import requested but ProfileBundle is not available yet"));
+    return importResult(false, 0, 0,
+                        QStringLiteral("Profile bundle backend is not available in this build (ProfileBundle missing)."));
+#endif
+}
+
+QVariantMap AppController::importOpenSshKnownHosts(const QUrl& fileUrl)
+{
+    const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
+    // Contract (agent 2-b): int HostKeyManager::importOpenSshKnownHosts(
+    //   const QString& openSshPath, QString* errorOut) on the existing
+    // HostKeyManager class (src/ssh/HostKeyManager.h). INTEGRATION NOTE: this
+    // call site requires agent 2-b's method to be present at compile time.
+    QString err;
+    const int imported = HostKeyManager().importOpenSshKnownHosts(path, &err);
+    if (imported < 0 || !err.isEmpty())
+        return importResult(false, 0, 0, err.isEmpty()
+                                                ? QStringLiteral("Importing known_hosts entries failed.")
+                                                : err);
+    return importResult(true, imported, 0, {});
 }
 
 // ---- clipboard / archive / preview ---------------------------------------------
@@ -580,6 +812,7 @@ void AppController::runDiagnostics(qint64 profileId, const QString& password)
     diag->moveToThread(thread);
     connect(thread, &QThread::started, diag, &Diagnostics::start);
     connect(diag, &Diagnostics::stepFinished, this, &AppController::diagnosticsStep);
+    connect(diag, &Diagnostics::keyExchangeInfo, this, &AppController::diagnosticsKex);
     connect(diag, &Diagnostics::finished, this, &AppController::diagnosticsFinished);
     connect(diag, &Diagnostics::finished, thread, &QThread::quit);
     connect(thread, &QThread::finished, diag, &QObject::deleteLater);

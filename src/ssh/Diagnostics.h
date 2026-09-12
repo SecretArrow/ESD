@@ -26,6 +26,10 @@ public:
 
 signals:
     void stepFinished(const QString& step, bool ok, const QString& detail, int ms);
+    // Negotiated key exchange summary (emitted right after the handshake step):
+    // kex is the negotiated KEX name ("unknown" when the engine cannot report
+    // it), postQuantumReady is true when it is a PQ/hybrid algorithm.
+    void keyExchangeInfo(const QString& kex, bool postQuantumReady, const QString& note);
     void finished(bool allOk, int totalMs);
 
 private:

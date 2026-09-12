@@ -1,7 +1,11 @@
 #include "VtEmulator.h"
 
+#include "SixelDecoder.h"
+
 #include <QMutexLocker>
 
+#include <algorithm>
+#include <cstring>
 
 #include <vterm.h>
 #include <vterm_keycodes.h>
@@ -15,6 +19,8 @@ const VTermScreenCallbacks VtEmulator::s_screenCallbacks = {
 namespace {
 
 constexpr int kScrollDamageEveryN = 1;
+constexpr size_t kMaxOscBytes = 64 * 1024;          // per OSC payload
+constexpr size_t kMaxSixelBytes = 32 * 1024 * 1024; // per sixel payload
 
 } // namespace
 
@@ -50,6 +56,8 @@ VtEmulator::VtEmulator(int cols, int rows, QObject* parent)
     m_palette[256] = QColor(0xe6, 0xe8, 0xee); // default fg
     m_palette[257] = QColor(0x14, 0x17, 0x1e); // default bg
 
+    m_screenMarks.assign(size_t(m_rows), RowMark::None);
+
     m_vt = vterm_new(m_rows, m_cols);
     vterm_set_utf8(m_vt, 1);
     vterm_output_set_callback(m_vt, &VtEmulator::cbOutput, this);
@@ -69,15 +77,81 @@ VtEmulator::~VtEmulator()
         vterm_free(m_vt);
 }
 
+// ---------------------------------------------------------------------------
+// Raw input: pass 1 scans the chunk for OSC 133 / sixel DCS boundaries,
+// pass 2 replays the chunk to libvterm in runs split at event boundaries so
+// that marker placement uses the cursor position at the sequence's receipt.
+// ---------------------------------------------------------------------------
 void VtEmulator::feed(const char* data, size_t len)
 {
     if (!data || len == 0)
         return;
-    QMutexLocker lock(&m_mutex);
-    vterm_input_write(m_vt, data, len);
-    vterm_screen_flush_damage(m_screen);
+
+    std::vector<ScanEvent> events;
+    bool becameActive = false;
+
+    {
+        QMutexLocker lock(&m_mutex);
+
+        // Pass 1: byte-stream scan (state survives across feed() calls).
+        for (size_t i = 0; i < len; ++i)
+            scanByte(unsigned char(data[i]), i, events);
+
+        // Pass 2: forward everything to libvterm, applying marks at the
+        // right moments. libvterm ignores unknown OSC and DCS strings, so
+        // forwarding the raw bytes is harmless.
+        size_t written = 0;
+        for (const ScanEvent& ev : events) {
+            const size_t stop = std::min(ev.endOffset, len);
+            if (stop > written) {
+                vterm_input_write(m_vt, data + written, stop - written);
+                vterm_screen_flush_damage(m_screen);
+                written = stop;
+            }
+            if (!m_shellIntegrationActive
+                && (ev.type == ScanEvent::PromptStart || ev.type == ScanEvent::CommandStart
+                    || ev.type == ScanEvent::CommandDone)) {
+                m_shellIntegrationActive = true;
+                becameActive = true;
+            }
+            applyScanEvent(ev);
+        }
+        if (written < len) {
+            vterm_input_write(m_vt, data + written, len - written);
+            vterm_screen_flush_damage(m_screen);
+        }
+
+        // A line restored from scrollback is positioned after the moverect
+        // notification; apply its mark now that the screen settled.
+        if (m_pendingPopMarkValid) {
+            if (!m_screenMarks.empty())
+                m_screenMarks[0] = m_pendingPopMark;
+            m_pendingPopMarkValid = false;
+        }
+    }
+
+    // Emit notifications outside the lock (receivers are queued connections).
+    if (becameActive)
+        emit shellIntegrationChanged();
+    for (const ScanEvent& ev : events) {
+        switch (ev.type) {
+        case ScanEvent::CommandStart:
+            emit commandStarted();
+            break;
+        case ScanEvent::CommandDone:
+            if (ev.exitCode >= 0)
+                emit commandFinished(ev.exitCode);
+            break;
+        case ScanEvent::SixelImage:
+            emit sixelImageReady(ev.image);
+            break;
+        default:
+            break;
+        }
+    }
 }
 
+// ---------------------------------------------------------------------------
 void VtEmulator::inputBytes(const QByteArray& bytes)
 {
     emit outputReady(bytes);
@@ -140,8 +214,14 @@ void VtEmulator::resize(int cols, int rows)
     QMutexLocker lock(&m_mutex);
     m_cols = cols;
     m_rows = rows;
+    m_screenMarks.resize(size_t(rows), RowMark::None);
     vterm_set_size(m_vt, rows, cols);
     vterm_screen_flush_damage(m_screen);
+    if (m_pendingPopMarkValid) {
+        if (!m_screenMarks.empty())
+            m_screenMarks[0] = m_pendingPopMark;
+        m_pendingPopMarkValid = false;
+    }
     emit emulatorResized(cols, rows);
     emit damage();
 }
@@ -196,6 +276,7 @@ void VtEmulator::clearScrollback()
 {
     QMutexLocker lock(&m_mutex);
     m_scrollback.clear();
+    m_scrollbackMarks.clear();
     emit damage();
 }
 
@@ -232,6 +313,342 @@ QColor VtEmulator::resolveColor(const VTermColor& color, bool isForeground) cons
 }
 
 // ---------------------------------------------------------------------------
+// find-in-buffer (Task 2-a)
+// ---------------------------------------------------------------------------
+QString VtEmulator::rowTextUnlocked(int absoluteRow, std::vector<int>* colMap) const
+{
+    QString text;
+    if (absoluteRow < 0)
+        return text;
+    const int sb = int(m_scrollback.size());
+    if (colMap)
+        colMap->clear();
+    if (absoluteRow < sb) {
+        const auto& line = m_scrollback[size_t(absoluteRow)];
+        for (int c = 0; c < int(line.size()); ++c) {
+            const QString& t = line[size_t(c)].text;
+            if (colMap)
+                colMap->insert(colMap->end(), size_t(t.size()), c);
+            text += t;
+        }
+    } else {
+        const int sr = absoluteRow - sb;
+        if (sr >= m_rows)
+            return text;
+        for (int c = 0; c < m_cols; ++c) {
+            VTermPos pos { sr, c };
+            VTermScreenCell cell;
+            if (!vterm_screen_get_cell(m_screen, pos, &cell))
+                break;
+            QString t;
+            for (int i = 0; i < VTERM_MAX_CHARS_PER_CELL && cell.chars[i]; ++i)
+                t += QChar(cell.chars[i]);
+            if (t.isEmpty())
+                t = QStringLiteral(" ");
+            if (colMap)
+                colMap->insert(colMap->end(), size_t(t.size()), c);
+            text += t;
+        }
+    }
+    return text;
+}
+
+QString VtEmulator::rowText(int absoluteRow) const
+{
+    QMutexLocker lock(&m_mutex);
+    return rowTextUnlocked(absoluteRow, nullptr);
+}
+
+QVector<QPair<int, int>> VtEmulator::find(const QString& needle, bool caseSensitive) const
+{
+    QVector<QPair<int, int>> matches;
+    if (needle.isEmpty())
+        return matches;
+
+    QMutexLocker lock(&m_mutex);
+    const int total = int(m_scrollback.size()) + m_rows;
+    const Qt::CaseSensitivity cs = caseSensitive ? Qt::CaseSensitive : Qt::CaseInsensitive;
+    std::vector<int> colMap;
+    for (int r = 0; r < total; ++r) {
+        const QString text = rowTextUnlocked(r, &colMap);
+        int pos = int(text.indexOf(needle, 0, cs));
+        while (pos >= 0) {
+            const int col = size_t(pos) < colMap.size() ? colMap[size_t(pos)] : pos;
+            matches.append(QPair<int, int>(r, col));
+            pos = int(text.indexOf(needle, pos + qMax(1, needle.size()), cs));
+        }
+    }
+    return matches;
+}
+
+// ---------------------------------------------------------------------------
+// OSC 133 shell integration (Task 2-a)
+// ---------------------------------------------------------------------------
+VtEmulator::RowMark VtEmulator::rowMark(int absoluteRow) const
+{
+    QMutexLocker lock(&m_mutex);
+    const int sb = int(m_scrollback.size());
+    if (absoluteRow < 0)
+        return RowMark::None;
+    if (absoluteRow < sb) {
+        if (size_t(absoluteRow) >= m_scrollbackMarks.size())
+            return RowMark::None;
+        return m_scrollbackMarks[size_t(absoluteRow)];
+    }
+    const int sr = absoluteRow - sb;
+    if (sr >= m_rows || sr < 0 || size_t(sr) >= m_screenMarks.size())
+        return RowMark::None;
+    return m_screenMarks[size_t(sr)];
+}
+
+int VtEmulator::previousPromptRow(int currentViewportTop) const
+{
+    QMutexLocker lock(&m_mutex);
+    const int sb = int(m_scrollback.size());
+    const int total = sb + m_rows;
+    for (int r = qMin(currentViewportTop, total) - 1; r >= 0; --r) {
+        const RowMark m = r < sb ? (size_t(r) < m_scrollbackMarks.size()
+                                        ? m_scrollbackMarks[size_t(r)] : RowMark::None)
+                                 : (size_t(r - sb) < m_screenMarks.size()
+                                        ? m_screenMarks[size_t(r - sb)] : RowMark::None);
+        if (m == RowMark::PromptStart)
+            return r;
+    }
+    return -1;
+}
+
+int VtEmulator::nextPromptRow(int currentViewportTop) const
+{
+    QMutexLocker lock(&m_mutex);
+    const int sb = int(m_scrollback.size());
+    const int total = sb + m_rows;
+    for (int r = qMax(0, currentViewportTop) + 1; r < total; ++r) {
+        const RowMark m = r < sb ? (size_t(r) < m_scrollbackMarks.size()
+                                        ? m_scrollbackMarks[size_t(r)] : RowMark::None)
+                                 : (size_t(r - sb) < m_screenMarks.size()
+                                        ? m_screenMarks[size_t(r - sb)] : RowMark::None);
+        if (m == RowMark::PromptStart)
+            return r;
+    }
+    return -1;
+}
+
+bool VtEmulator::shellIntegrationActive() const
+{
+    QMutexLocker lock(&m_mutex);
+    return m_shellIntegrationActive;
+}
+
+void VtEmulator::setScreenMark(int row, RowMark mark)
+{
+    if (row < 0 || row >= m_rows || row >= int(m_screenMarks.size()))
+        return;
+    m_screenMarks[size_t(row)] = mark;
+}
+
+void VtEmulator::moveScreenMarks(const VTermRect& dest, const VTermRect& src)
+{
+    if (m_screenMarks.size() != size_t(m_rows))
+        return;
+    std::vector<RowMark> next(m_screenMarks.size(), RowMark::None);
+    for (int r = 0; r < m_rows; ++r) {
+        const bool inDest = r >= dest.start_row && r < dest.end_row;
+        const bool inSrc = r >= src.start_row && r < src.end_row;
+        if (!inDest && !inSrc)
+            next[size_t(r)] = m_screenMarks[size_t(r)];
+    }
+    const int count = std::min(dest.end_row - dest.start_row, src.end_row - src.start_row);
+    for (int i = 0; i < count; ++i) {
+        const int dr = dest.start_row + i;
+        const int sr = src.start_row + i;
+        if (dr >= 0 && dr < m_rows && sr >= 0 && sr < m_rows)
+            next[size_t(dr)] = m_screenMarks[size_t(sr)];
+    }
+    m_screenMarks = std::move(next);
+}
+
+// ---------------------------------------------------------------------------
+// Byte-stream scanner (Task 2-a): extracts OSC 133 payloads and sixel DCS
+// bodies from the raw stream. The state machine persists across feed() calls
+// so sequences split over chunk boundaries are handled.
+// ---------------------------------------------------------------------------
+void VtEmulator::scanByte(unsigned char b, size_t offset, std::vector<ScanEvent>& events)
+{
+    switch (m_scanState) {
+    case ScanState::Ground:
+        if (b == 0x1b)
+            m_scanState = ScanState::Esc;
+        break;
+
+    case ScanState::Esc:
+        switch (b) {
+        case ']': // OSC
+            m_scanState = ScanState::Osc;
+            m_oscBuffer.clear();
+            m_captureOverflow = false;
+            break;
+        case 'P': // DCS
+            m_scanState = ScanState::DcsIntro;
+            m_dcsIntro.clear();
+            break;
+        default: // single-char escape / CSI / charset: irrelevant to us
+            m_scanState = ScanState::Ground;
+            break;
+        }
+        break;
+
+    case ScanState::Osc:
+        if (b == 0x07) { // BEL terminator
+            completeOsc(offset + 1, events);
+            m_scanState = ScanState::Ground;
+        } else if (b == 0x1b) {
+            m_scanState = ScanState::OscEsc;
+        } else if (b == 0x18 || b == 0x1a) { // CAN/SUB abort
+            m_oscBuffer.clear();
+            m_scanState = ScanState::Ground;
+        } else if (m_oscBuffer.size() < qsizetype(kMaxOscBytes)) {
+            m_oscBuffer.append(char(b));
+        } else {
+            m_captureOverflow = true; // keep consuming, drop content
+        }
+        break;
+
+    case ScanState::OscEsc:
+        if (b == '\\') { // ST
+            completeOsc(offset + 1, events);
+            m_scanState = ScanState::Ground;
+        } else {
+            // ESC terminated the string; the current byte starts a new
+            // escape sequence.
+            completeOsc(offset, events);
+            m_scanState = ScanState::Esc;
+            scanByte(b, offset, events);
+        }
+        break;
+
+    case ScanState::DcsIntro:
+        if (b == 'q') { // sixel introducer final byte
+            m_sixelTransparent = SixelDecoder::introRequestsTransparency(m_dcsIntro);
+            m_sixelBuffer.clear();
+            m_captureOverflow = false;
+            m_scanState = ScanState::DcsSixel;
+        } else if (b >= 0x40 && b <= 0x7e) {
+            // Other DCS sequences are not ours; their bytes flow through.
+            m_scanState = ScanState::Ground;
+        } else if (b == 0x1b) {
+            m_scanState = ScanState::Esc;
+        } else if (b == 0x18 || b == 0x1a) {
+            m_scanState = ScanState::Ground;
+        } else if (m_dcsIntro.size() < 64) {
+            m_dcsIntro.append(char(b));
+        } else {
+            m_scanState = ScanState::Ground; // not a sane sixel introducer
+        }
+        break;
+
+    case ScanState::DcsSixel:
+        if (b == 0x1b) {
+            m_scanState = ScanState::DcsEsc;
+        } else if (b == 0x07) { // BEL as terminator (tolerated)
+            finishSixel(offset + 1, events);
+            m_scanState = ScanState::Ground;
+        } else if (b == 0x18 || b == 0x1a) { // CAN/SUB abort
+            m_sixelBuffer.clear();
+            m_captureOverflow = false;
+            m_scanState = ScanState::Ground;
+        } else if (m_sixelBuffer.size() < qsizetype(kMaxSixelBytes)) {
+            m_sixelBuffer.append(char(b));
+        } else {
+            m_captureOverflow = true; // keep consuming, drop content
+        }
+        break;
+
+    case ScanState::DcsEsc:
+        if (b == '\\') { // ST
+            finishSixel(offset + 1, events);
+            m_scanState = ScanState::Ground;
+        } else {
+            // Defensive: ESC inside the payload terminates it.
+            finishSixel(offset, events);
+            m_scanState = ScanState::Esc;
+            scanByte(b, offset, events);
+        }
+        break;
+    }
+}
+
+void VtEmulator::completeOsc(size_t endOffset, std::vector<ScanEvent>& events)
+{
+    if (!m_captureOverflow && m_oscBuffer.size() >= 5
+        && m_oscBuffer.startsWith("133;")) {
+        const char cmd = m_oscBuffer.at(4);
+        switch (cmd) {
+        case 'A':
+            events.push_back({ ScanEvent::PromptStart, -1, QImage(), endOffset });
+            break;
+        case 'B':
+            events.push_back({ ScanEvent::OutputStart, -1, QImage(), endOffset });
+            break;
+        case 'C':
+            events.push_back({ ScanEvent::CommandStart, -1, QImage(), endOffset });
+            break;
+        case 'D': {
+            int exitCode = -1;
+            if (m_oscBuffer.size() > 6 && m_oscBuffer.at(5) == ';') {
+                QByteArray tail = m_oscBuffer.mid(6);
+                const int semi = tail.indexOf(';');
+                if (semi >= 0)
+                    tail.truncate(semi);
+                bool ok = false;
+                exitCode = QString::fromLatin1(tail).trimmed().toInt(&ok);
+                if (!ok)
+                    exitCode = -1;
+            }
+            events.push_back({ ScanEvent::CommandDone, exitCode, QImage(), endOffset });
+            break;
+        }
+        default: // 'P' (prompt line props), 'E', ... ignored for now
+            break;
+        }
+    }
+    m_oscBuffer.clear();
+    m_captureOverflow = false;
+}
+
+void VtEmulator::finishSixel(size_t endOffset, std::vector<ScanEvent>& events)
+{
+    if (!m_captureOverflow && !m_sixelBuffer.isEmpty()) {
+        const QImage img = SixelDecoder::decode(m_sixelBuffer, m_sixelTransparent);
+        if (!img.isNull())
+            events.push_back({ ScanEvent::SixelImage, -1, img, endOffset });
+    }
+    m_sixelBuffer.clear();
+    m_captureOverflow = false;
+}
+
+void VtEmulator::applyScanEvent(const ScanEvent& ev)
+{
+    RowMark mark = RowMark::None;
+    switch (ev.type) {
+    case ScanEvent::PromptStart:
+        mark = RowMark::PromptStart;
+        break;
+    case ScanEvent::OutputStart:
+        mark = RowMark::OutputStart;
+        break;
+    case ScanEvent::CommandStart:
+        mark = RowMark::CommandStart;
+        break;
+    case ScanEvent::CommandDone:
+        mark = RowMark::CommandDone;
+        break;
+    case ScanEvent::SixelImage:
+        return; // no row mark; the image is delivered via sixelImageReady()
+    }
+    setScreenMark(m_cursorRow, mark);
+}
+
+// ---------------------------------------------------------------------------
 // libvterm callbacks
 // ---------------------------------------------------------------------------
 int VtEmulator::cbDamage(VTermRect, void* user)
@@ -241,14 +658,16 @@ int VtEmulator::cbDamage(VTermRect, void* user)
     return 1;
 }
 
-int VtEmulator::cbMoveRect(VTermRect, VTermRect, void* user)
+int VtEmulator::cbMoveRect(VTermRect dest, VTermRect src, void* user)
 {
     auto* self = static_cast<VtEmulator*>(user);
+    // Keep shell-integration markers aligned with the moved content.
+    self->moveScreenMarks(dest, src);
     emit self->damage();
     return 1;
 }
 
-int VtEmulator::cbMoveCursor(VTermPos pos, VTermPos, int visible, void* user)
+int VtEmulator::cbMoveCursor(VTermPos pos, VTermPos oldpos, int visible, void* user)
 {
     auto* self = static_cast<VtEmulator*>(user);
     self->m_cursorRow = pos.row;
@@ -320,6 +739,8 @@ int VtEmulator::cbClear(void* user)
 {
     auto* self = static_cast<VtEmulator*>(user);
     self->m_scrollback.clear();
+    self->m_scrollbackMarks.clear();
+    std::fill(self->m_screenMarks.begin(), self->m_screenMarks.end(), RowMark::None);
     emit self->damage();
     return 1;
 }
@@ -351,8 +772,15 @@ void VtEmulator::pushScrollbackLine(int cols, const VTermScreenCell* cells)
         line.push_back(std::move(cell));
     }
     m_scrollback.push_back(std::move(line));
-    while (int(m_scrollback.size()) > m_scrollbackLimit)
+    // The pushed top-row mark travels with the content into scrollback; the
+    // remaining screen rows are re-aligned by the moverect notification.
+    m_scrollbackMarks.push_back(m_screenMarks.empty() ? RowMark::None
+                                                      : m_screenMarks.front());
+    while (int(m_scrollback.size()) > m_scrollbackLimit) {
         m_scrollback.pop_front();
+        if (!m_scrollbackMarks.empty())
+            m_scrollbackMarks.pop_front();
+    }
 }
 
 bool VtEmulator::popScrollbackLine(int cols, VTermScreenCell* cells)
@@ -376,7 +804,12 @@ bool VtEmulator::popScrollbackLine(int cols, VTermScreenCell* cells)
         memset(&cells[c], 0, sizeof(cells[c]));
         cells[c].chars[0] = ' ';
     }
+    // The restored line takes its mark back (applied after the pending move).
+    m_pendingPopMark = m_scrollbackMarks.empty() ? RowMark::None : m_scrollbackMarks.front();
+    m_pendingPopMarkValid = true;
     m_scrollback.pop_front();
+    if (!m_scrollbackMarks.empty())
+        m_scrollbackMarks.pop_front();
     return true;
 }
 

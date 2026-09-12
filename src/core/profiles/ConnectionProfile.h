@@ -45,6 +45,9 @@ struct ConnectionProfile
     QStringList tags;
     bool favorite = false;
 
+    // ssh | telnet | serial  (console types reuse the same profile record)
+    QString connectionType = QStringLiteral("ssh");
+
     QString host;
     int port = 22;
     QString username;
@@ -56,6 +59,23 @@ struct ConnectionProfile
 
     // auto | libssh | libssh2
     QString engine = QStringLiteral("auto");
+
+    // Comma-separated KEX preference list ("" = engine default).
+    // Example: "mlkem768x25519-sha256,sntrup761x25519@openssh.com,curve25519-sha256"
+    QString kexAlgorithms;
+
+    // X11 forwarding (SSH only). x11Screen = local display screen number used
+    // on Windows where DISPLAY is absent (VcXsrv/X410 convention: TCP 6000+n).
+    bool x11Forward = false;
+    int x11Screen = 0;
+
+    // Serial console (connectionType == "serial")
+    QString serialPort;                 // e.g. "COM3" or "/dev/ttyUSB0"
+    int serialBaud = 115200;
+    int serialDataBits = 8;             // 7 | 8
+    QString serialParity = QStringLiteral("none"); // none | even | odd
+    int serialStopBits = 1;             // 1 | 2
+    int serialFlowControl = 0;          // 0 none | 1 rtscts | 2 xonxoff
 
     QStringList jumpHosts;         // ["user@bastion:22", ...] ordered chain
 

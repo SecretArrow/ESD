@@ -93,6 +93,18 @@ class ProfileDraft : public QObject
     Q_PROPERTY(QString transferProtocol MEMBER transferProtocol NOTIFY changed)
     Q_PROPERTY(QVariantList forwardingRules MEMBER forwardingRules NOTIFY changed)
 
+    // Task 2-c: connection-layer fields
+    Q_PROPERTY(QString connectionType MEMBER connectionType NOTIFY changed)
+    Q_PROPERTY(QString kexAlgorithms MEMBER kexAlgorithms NOTIFY changed)
+    Q_PROPERTY(bool x11Forward MEMBER x11Forward NOTIFY changed)
+    Q_PROPERTY(int x11Screen MEMBER x11Screen NOTIFY changed)
+    Q_PROPERTY(QString serialPort MEMBER serialPort NOTIFY changed)
+    Q_PROPERTY(int serialBaud MEMBER serialBaud NOTIFY changed)
+    Q_PROPERTY(int serialDataBits MEMBER serialDataBits NOTIFY changed)
+    Q_PROPERTY(QString serialParity MEMBER serialParity NOTIFY changed)
+    Q_PROPERTY(int serialStopBits MEMBER serialStopBits NOTIFY changed)
+    Q_PROPERTY(int serialFlowControl MEMBER serialFlowControl NOTIFY changed)
+
 public:
     explicit ProfileDraft(QObject* parent = nullptr) : QObject(parent) {}
     static ProfileDraft* fromProfile(const ConnectionProfile& p);
@@ -113,6 +125,18 @@ public:
     QString startupCommands, environment, sftpDefaultRemoteDir, sftpDefaultLocalDir;
     QString transferProtocol = QStringLiteral("sftp");
     QVariantList forwardingRules;
+
+    // Task 2-c additions (defaults mirror ConnectionProfile)
+    QString connectionType = QStringLiteral("ssh");
+    QString kexAlgorithms;
+    bool x11Forward = false;
+    int x11Screen = 0;
+    QString serialPort;
+    int serialBaud = 115200;
+    int serialDataBits = 8;
+    QString serialParity = QStringLiteral("none");
+    int serialStopBits = 1;
+    int serialFlowControl = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -163,12 +187,30 @@ public:
     Q_INVOKABLE void openSftpFor(qint64 sessionId, const QVariantMap& panelState);
     Q_INVOKABLE SshSession* session(qint64 sessionId) const;
 
+    // ---- console (Telnet/Serial) sessions ----------------------------------
+    // Creates (and owns) a TelnetSession or SerialSession from a profile map
+    // (either { profileId } for a stored profile or explicit fields such as
+    // connectionType/host/port/serialPort/serialBaud/...). The returned
+    // object exposes the console attachment contract: bytesReceived(const
+    // QByteArray&), write(const QByteArray&), ptyResize(int,int).
+    Q_INVOKABLE QObject* openConsoleSession(const QVariantMap& profile);
+    Q_INVOKABLE void closeConsoleSession(qint64 sessionId);
+    Q_INVOKABLE QObject* consoleSession(qint64 sessionId) const;
+
     // ---- import/export ----------------------------------------------------
     Q_INVOKABLE QString importOpenSshConfig(const QString& path);
     Q_INVOKABLE QString exportProfilesJson(const QString& path);
     Q_INVOKABLE QString importProfilesJson(const QString& path);
     Q_INVOKABLE QString backupProfiles(const QString& path);
     Q_INVOKABLE QString restoreBackup(const QString& path);
+
+    // ---- import/sync (agent 2-b API contracts) -----------------------------
+    // All return { ok: bool, imported: int, skipped: int, error: QString } and
+    // degrade to an error map (never crash) when the backend is unavailable.
+    Q_INVOKABLE QVariantMap importPuttySessions();
+    Q_INVOKABLE QVariantMap exportProfileBundle(const QUrl& fileUrl, const QString& passphrase);
+    Q_INVOKABLE QVariantMap importProfileBundle(const QUrl& fileUrl, const QString& passphrase);
+    Q_INVOKABLE QVariantMap importOpenSshKnownHosts(const QUrl& fileUrl);
 
     // ---- diagnostics / tools ----------------------------------------------
     // ---- clipboard / archive / preview -------------------------------------
@@ -198,12 +240,18 @@ signals:
     void reconnecting(qint64 sessionId, int attempt, int maxAttempts);
     void notify(const QString& title, const QString& body, bool isError);
     void diagnosticsStep(const QString& step, bool ok, const QString& detail, int ms);
+    void diagnosticsKex(const QString& kex, bool postQuantumReady, const QString& note);
     void diagnosticsFinished(bool allOk);
 
 private:
     explicit AppController(QObject* parent = nullptr);
     void wireSession(SshSession* session);
     static AppController* s_instance;
+
+    // Console (Telnet/Serial) session registry; objects are parented to the
+    // controller and deleteLater()'d via closeConsoleSession().
+    QHash<qint64, QObject*> m_consoleSessions;
+    qint64 m_nextConsoleSessionId = 1;
 };
 
 } // namespace eclipse

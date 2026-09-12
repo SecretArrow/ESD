@@ -42,6 +42,16 @@ built with C++20 and Qt 6.
   session-only mode; no plaintext secrets on disk and credential redaction in all logs.
 - **Diagnostics** — step-by-step DNS → TCP → handshake → host key → auth → SFTP report with latency.
 - **Command runner** — run one command on many servers at once; snippets with `{variables}`.
+- **Terminal search & shell integration** — find-in-buffer with match highlighting (Ctrl+F),
+  OSC 133 prompt markers with "command finished (exit N)" notifications and jump-to-command
+  navigation, sixel graphics decoding.
+- **Interop & portability** — import PuTTY sessions (Windows registry or `.reg` files), import
+  OpenSSH `known_hosts` (incl. hashed `|1|` entries), encrypted profile bundles
+  (AES-256-GCM) for device-to-device transfer, and an optional profile sync folder
+  (Dropbox/Nextcloud friendly).
+- **Console protocols** — Telnet sessions (RFC 854) and serial console connections
+  (Qt6::SerialPort: baud/parity/flow control) next to SSH, per connection profile.
+- **X11 forwarding** — request X11 on shell channels and bridge them to the local display.
 - **Keyboard-driven UX** — command palette (`Ctrl+Shift+P`), customizable shortcuts, command
   palette fuzzy search, light/dark/system themes, custom accent color.
 - **Fast and native** — C++20, Qt 6 Quick UI, worker-thread SSH engine; the UI never blocks.

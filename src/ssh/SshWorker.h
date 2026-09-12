@@ -15,6 +15,7 @@
 #include "Types.h"
 
 class QTcpSocket;
+class QLocalSocket;
 
 namespace eclipse {
 
@@ -89,7 +90,12 @@ private:
         std::shared_ptr<IChannel> channel;
         enum Kind { Shell, Exec, Pipe } kind = Shell;
         QTcpSocket* socket = nullptr;      // Pipe: the local/accepted side
+        QLocalSocket* lsocket = nullptr;   // Pipe (X11): Unix-socket side to the local display
         bool handshakeDone = false;
+        bool dead = false;                 // marked by error/disconnect handlers; reaped by the pump
+        bool isX11 = false;                // X11 entry: first setup packet gets the cookie rewrite
+        QByteArray x11Preamble;            // X11: remote->local bytes held back for the rewrite
+        bool x11RewriteDone = false;
         QByteArray socksBuffer;
         QString socksHost;
         int socksPort = 0;
@@ -103,6 +109,18 @@ private:
     void teardown(const QString& reason, bool byRequest);
     void setState(SessionState s);
     void updateLatency();
+
+    // X11 forwarding (profile.x11Forward). Requested per shell channel in
+    // openTerminal(); inbound channels are accepted in pollX11() and pumped
+    // like Pipe entries against a local display socket (thread per channel is
+    // NOT used - the 4 ms pump already multiplexes all channels).
+    void pollX11();
+    void ensureX11Cookies();
+    bool openLocalX11Socket(int cid, ChannelEntry& entry);
+    void writeX11Data(ChannelEntry& entry, const QByteArray& data);
+    void tryFlushX11Preamble(ChannelEntry& entry);
+    static bool x11LocalConnected(const ChannelEntry& entry);
+    static void writeX11Raw(ChannelEntry& entry, const QByteArray& data);
 
     ConnectionProfile m_profile;
     std::unique_ptr<ISshEngine> m_engine;
@@ -120,6 +138,11 @@ private:
 
     QString m_password;      // runtime ("ask" mode); wiped after auth
     QString m_passphrase;
+
+    // X11 forwarding state (profile.x11Forward)
+    QString m_x11FakeCookie;      // 16 ASCII hex chars sent in x11-req
+    QByteArray m_x11RealCookie;   // resolved once from Xauthority (may be empty)
+    bool m_x11CookieResolved = false;
 
     QHash<int, ChannelEntry> m_channels;
     int m_nextChannelId = 1;

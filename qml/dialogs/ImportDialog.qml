@@ -1,0 +1,197 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Dialogs
+
+// Import / export center: PuTTY sessions, OpenSSH known_hosts and encrypted
+// profile bundles. Calls AppController invokables (exposed to QML as the
+// "App" context property, like every other dialog in qml/dialogs):
+//   App.importPuttySessions()                              -> {ok, imported, skipped, error}
+//   App.importOpenSshKnownHosts(filePath)                  -> {ok, imported, skipped, error}
+//   App.exportProfileBundle(filePath, passphrase)          -> {ok, error}
+//   App.importProfileBundle(filePath, passphrase)          -> {ok, imported, skipped, error}
+Dialog {
+    id: dlg
+    title: qsTr("Import / Export")
+    modal: true
+    parent: Overlay.overlay
+    anchors.centerIn: parent
+    width: 580
+    standardButtons: Dialog.Close
+
+    // 0 = PuTTY sessions, 1 = OpenSSH known_hosts, 2 = profile bundle
+    property int source: 0
+    readonly property bool isBundle: source === 2
+    property string resultTitle: ""
+    property string resultText: ""
+    property bool resultIsError: false
+
+    function openDialog() {
+        resultTitle = ""; resultText = ""; resultIsError = false;
+        open()
+    }
+
+    // file:// URL -> local path (handles the Windows "/C:/..." form and %20;
+    // same convention as the import/export FileDialog in Main.qml).
+    function localPath(url) {
+        const s = url.toString();
+        if (s.indexOf("file://") !== 0) return s;
+        let p = s.substring(7);
+        if (/^\/[A-Za-z]:\//.test(p)) p = p.substring(1);
+        try { return decodeURIComponent(p); } catch (e) { return p; }
+    }
+
+    function showResult(label, res) {
+        resultTitle = label;
+        if (res && res.ok) {
+            let txt = qsTr("Done");
+            if (res.imported !== undefined)
+                txt = qsTr("Imported %1").arg(res.imported);
+            if (res.skipped !== undefined && res.skipped > 0)
+                txt += qsTr(", skipped %1").arg(res.skipped);
+            if (res.error && res.error.length > 0)
+                txt += "\n" + res.error;
+            resultText = txt;
+            resultIsError = false;
+        } else {
+            resultText = (res && res.error && res.error.length > 0) ? res.error : qsTr("Operation failed");
+            resultIsError = true;
+        }
+    }
+
+    function runImport() {
+        if (source === 0) {
+            showResult(qsTr("PuTTY import"), App.importPuttySessions());
+        } else if (source === 1) {
+            if (pathField.text.length === 0) {
+                showResult(qsTr("known_hosts import"), { ok: false, error: qsTr("Choose a known_hosts file first.") });
+                return;
+            }
+            showResult(qsTr("known_hosts import"), App.importOpenSshKnownHosts(pathField.text));
+        } else {
+            if (pathField.text.length === 0) {
+                showResult(qsTr("Bundle import"), { ok: false, error: qsTr("Choose a bundle file first.") });
+                return;
+            }
+            showResult(qsTr("Bundle import"), App.importProfileBundle(pathField.text, passField.text));
+        }
+    }
+
+    function runExport() {
+        if (pathField.text.length === 0) {
+            showResult(qsTr("Bundle export"), { ok: false, error: qsTr("Choose a destination file first.") });
+            return;
+        }
+        showResult(qsTr("Bundle export"), App.exportProfileBundle(pathField.text, passField.text));
+    }
+
+    contentItem: ColumnLayout {
+        spacing: 10
+
+        ColumnLayout {
+            spacing: 4
+            RadioButton { text: qsTr("PuTTY sessions"); checked: dlg.source === 0
+                onToggled: if (checked) dlg.source = 0 }
+            RadioButton { text: qsTr("OpenSSH known_hosts (host keys)"); checked: dlg.source === 1
+                onToggled: if (checked) dlg.source = 1 }
+            RadioButton { text: qsTr("Profile bundle (device sync)"); checked: dlg.source === 2
+                onToggled: if (checked) dlg.source = 2 }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            font.pixelSize: 11
+            color: Theme.textMuted
+            visible: dlg.source === 0
+            text: qsTr("Reads saved sessions from the Windows registry (HKCU\\Software\\SimonTatham\\PuTTY\\Sessions). Only SSH sessions are imported; telnet/serial sessions are counted as skipped. On other platforms export a .reg file on Windows first and hand it to the PuTTY .reg import.")
+        }
+
+        RowLayout {
+            visible: dlg.source !== 0
+            Layout.fillWidth: true
+            Label { text: dlg.isBundle ? qsTr("File") : qsTr("known_hosts"); color: Theme.text }
+            TextField { id: pathField
+                Layout.fillWidth: true
+                placeholderText: dlg.isBundle ? qsTr("bundle.json / bundle.epb")
+                                              : qsTr("/path/to/known_hosts") }
+            Button { text: "…"; flat: true; onClicked: openFileDlg.open() }
+        }
+
+        RowLayout {
+            visible: dlg.isBundle
+            Layout.fillWidth: true
+            Label { text: qsTr("Passphrase"); color: Theme.text }
+            TextField { id: passField
+                Layout.fillWidth: true
+                echoMode: TextInput.Password
+                placeholderText: qsTr("empty = write / read plaintext bundle") }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            Item { Layout.fillWidth: true }
+            Button {
+                visible: dlg.isBundle
+                text: qsTr("Export bundle…")
+                onClicked: saveFileDlg.open()
+            }
+            Button {
+                highlighted: true
+                text: dlg.source === 0 ? qsTr("Import PuTTY sessions")
+                    : dlg.source === 1 ? qsTr("Import host keys…")
+                    : qsTr("Import bundle…")
+                onClicked: {
+                    if (dlg.source === 0) { dlg.runImport(); return; }
+                    if (pathField.text.length > 0) { dlg.runImport(); return; }
+                    openFileDlg.open();
+                }
+            }
+        }
+
+        // Results area (counts / errors after a run)
+        Rectangle {
+            Layout.fillWidth: true
+            visible: dlg.resultText.length > 0
+            radius: 6
+            color: Theme.surfaceAlt
+            border.color: dlg.resultIsError ? Theme.error : Theme.success
+            implicitHeight: resultsCol.implicitHeight + 20
+            ColumnLayout {
+                id: resultsCol
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 10
+                spacing: 2
+                Label { visible: dlg.resultTitle.length > 0; text: dlg.resultTitle
+                    font.weight: Font.DemiBold; color: Theme.text }
+                Label { text: dlg.resultText; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true
+                    color: dlg.resultIsError ? Theme.error : Theme.text; font.pixelSize: 12 }
+            }
+        }
+    }
+
+    FileDialog {
+        id: openFileDlg
+        fileMode: FileDialog.OpenFile
+        nameFilters: dlg.source === 1 ? ["known_hosts (*)", "All files (*)"]
+                   : dlg.source === 2 ? ["Profile bundle (*.json *.epb)", "All files (*)"]
+                   : ["PuTTY registry export (*.reg)", "All files (*)"]
+        onAccepted: {
+            pathField.text = dlg.localPath(selectedFile);
+            if (dlg.source !== 0)
+                dlg.runImport();
+        }
+    }
+
+    FileDialog {
+        id: saveFileDlg
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["Profile bundle (*.json)", "Encrypted bundle (*.epb)", "All files (*)"]
+        onAccepted: {
+            pathField.text = dlg.localPath(selectedFile);
+            dlg.runExport();
+        }
+    }
+}

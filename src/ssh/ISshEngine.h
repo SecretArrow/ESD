@@ -44,6 +44,21 @@ public:
     virtual void sendEof() = 0;
     virtual void close() = 0;
     virtual int exitStatus() = 0;
+
+    // X11 forwarding: ask the server to forward X connections opened by the
+    // programs running on this channel back to us (they then arrive through
+    // ISshEngine::acceptX11). authCookie is the fake MIT-MAGIC-COOKIE-1 data
+    // sent in the x11-req payload; the caller rewrites it to the real cookie
+    // on the local display connection. Engines without X11 support return a
+    // failed Outcome and never abort the session.
+    virtual Outcome requestX11(int screenNumber, const QString& authCookie, QString* err)
+    {
+        Q_UNUSED(screenNumber);
+        Q_UNUSED(authCookie);
+        if (err)
+            *err = QStringLiteral("X11 forwarding is not supported by this engine.");
+        return Outcome::fail(QStringLiteral("X11 forwarding is not supported by this engine."));
+    }
 };
 
 class ISftpSession
@@ -134,6 +149,22 @@ public:
     virtual int sendKeepAlive() = 0;
 
     virtual EngineInfo negotiatedInfo() const = 0;
+
+    // Preferred KEX algorithm list (comma-separated). Applied before the
+    // handshake when non-empty; engines log (but never abort) on failure.
+    virtual void setKexAlgorithms(const QString& list) { Q_UNUSED(list); }
+
+    // X11: accept one inbound X11 channel previously requested through
+    // IChannel::requestX11. Non-blocking when timeoutMs == 0; returns nullptr
+    // when no pending X11 connection (or when the engine cannot support X11
+    // forwarding - see backend notes).
+    virtual std::unique_ptr<IChannel> acceptX11(int timeoutMs, QString* err)
+    {
+        Q_UNUSED(timeoutMs);
+        if (err)
+            *err = QStringLiteral("X11 forwarding is not supported by this engine.");
+        return nullptr;
+    }
 
     // Serializes all transport access (jump bridges pump from other threads).
     virtual std::recursive_mutex& rawMutex() = 0;

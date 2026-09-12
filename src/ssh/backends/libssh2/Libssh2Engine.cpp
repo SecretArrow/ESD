@@ -22,6 +22,7 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QSaveFile>
 
 #include <atomic>
@@ -31,7 +32,6 @@
 #include <cstring>
 #include <mutex>
 #include <thread>
-
 #include <sys/stat.h>
 #include <ctime>
 
@@ -66,6 +66,12 @@ constexpr int kShortTimeoutMs = 5000;
 qint64 nowMs();
 void sleepRetry();
 void closeSocket(libssh2_socket_t fd);
+
+// Inbound X11 registry (defined below the engine section): libssh2's
+// LIBSSH2_CALLBACK_X11 trampoline only receives the LIBSSH2_SESSION*, so a
+// registry maps live sessions back to their owning engine. Entries are added
+// in finishConnect() and removed as soon as the session is freed.
+void x11RegistryRemove(LIBSSH2_SESSION* session);
 } // namespace
 
 struct Libssh2SessionState
@@ -104,6 +110,7 @@ struct Libssh2SessionState
                 libssh2_session_set_blocking(session, 1);
                 libssh2_session_free(session);
             }
+            x11RegistryRemove(session); // drop the X11 callback registry entry
             session = nullptr;
         }
         listener = nullptr;
@@ -115,6 +122,56 @@ struct Libssh2SessionState
         keepaliveConfigured = false;
     }
 };
+
+namespace {
+
+// X11 inbound registry: the LIBSSH2_CALLBACK_X11 trampoline only receives the
+// LIBSSH2_SESSION*, so live sessions are mapped back to their owning engine.
+// Entries are added in finishConnect() and removed the moment the session is
+// freed (handshake failure or Libssh2SessionState::closeNow).
+QMutex g_x11RegistryMutex;
+QHash<LIBSSH2_SESSION*, Libssh2Engine*> g_x11Registry;
+
+void x11RegistryAdd(LIBSSH2_SESSION* session, Libssh2Engine* engine)
+{
+    QMutexLocker lock(&g_x11RegistryMutex);
+    g_x11Registry.insert(session, engine);
+}
+
+void x11RegistryRemove(LIBSSH2_SESSION* session)
+{
+    QMutexLocker lock(&g_x11RegistryMutex);
+    g_x11Registry.remove(session);
+}
+
+Libssh2Engine* x11RegistryLookup(LIBSSH2_SESSION* session)
+{
+    QMutexLocker lock(&g_x11RegistryMutex);
+    return g_x11Registry.value(session, nullptr);
+}
+
+// Signature: LIBSSH2_X11_OPEN_FUNC macro (libssh2.h:360) / LIBSSH2_CALLBACK_X11
+// (libssh2.h:399). Fires on the thread that processes packets (the worker pump)
+// while the session state mutex is held - therefore it only touches its own
+// queue mutex, never libssh2 calls that re-enter the session.
+void libssh2X11OpenTrampoline(LIBSSH2_SESSION* session, LIBSSH2_CHANNEL* channel,
+                              const char* shost, int sport, void** abstract)
+{
+    Q_UNUSED(abstract);
+    if (!channel)
+        return;
+    Libssh2Engine* engine = x11RegistryLookup(session);
+    if (!engine) {
+        libssh2_channel_free(channel);
+        return;
+    }
+    LOG_SSH(QStringLiteral("libssh2 inbound X11 channel from %1:%2")
+                .arg(shost ? QString::fromLatin1(shost) : QStringLiteral("?"))
+                .arg(sport));
+    engine->enqueueX11Channel(channel);
+}
+
+} // namespace
 
 namespace {
 
@@ -950,6 +1007,32 @@ bool Libssh2Channel::startExec(const QString& command, QString* err)
         return false;
     }
     return true;
+}
+
+Outcome Libssh2Channel::requestX11(int screenNumber, const QString& authCookie, QString* err)
+{
+    auto st = m_state;
+    std::lock_guard<std::recursive_mutex> lock(st->mutex);
+    if (!m_channel || !st->session) {
+        if (err)
+            *err = QStringLiteral("Channel is not open.");
+        return Outcome::fail(QStringLiteral("Channel is not open."));
+    }
+    // libssh2_channel_x11_req_ex (libssh2.h:908); single_connection=0 keeps
+    // forwarding alive for the session. The fake cookie is rewritten by the
+    // worker on the local display connection (see SshWorker pump).
+    const QByteArray cookie = authCookie.toLatin1();
+    const int rc = retryEagain([&] {
+        return libssh2_channel_x11_req_ex(m_channel, 0, "MIT-MAGIC-COOKIE-1",
+                                          cookie.constData(), screenNumber);
+    }, nowMs() + st->opTimeoutMs);
+    if (rc != 0) {
+        if (err)
+            *err = libssh2ErrorText(st->session, rc);
+        return Outcome::fail(QStringLiteral("The server rejected the X11 forwarding request."),
+                             libssh2ErrorText(st->session, rc));
+    }
+    return Outcome::success();
 }
 
 // ===========================================================================
@@ -1878,6 +1961,25 @@ Outcome Libssh2Engine::finishConnect(const QString& hostForLog, int port,
     libssh2_session_set_timeout(session, long(effTimeout));
     libssh2_session_set_read_timeout(session, long(effTimeout));
 
+    // KEX preference: libssh2_session_method_pref (libssh2.h:690) must run
+    // BEFORE the handshake. Best effort - a rejected list is logged, the
+    // connection proceeds with the engine defaults.
+    if (!m_kexPreference.isEmpty()) {
+        const QByteArray kexPref = m_kexPreference.toUtf8();
+        if (libssh2_session_method_pref(session, LIBSSH2_METHOD_KEX, kexPref.constData()) != 0)
+            LOG_SSH_ERR(QStringLiteral("libssh2[%1] KEX preference rejected: %2")
+                            .arg(st->connId).arg(m_kexPreference));
+        else
+            LOG_SSH(QStringLiteral("libssh2[%1] KEX preference set: %2")
+                        .arg(st->connId).arg(m_kexPreference));
+    }
+
+    // X11: libssh2 delivers inbound X11 channels through LIBSSH2_CALLBACK_X11
+    // (libssh2.h:399). Register the trampoline and map session -> engine.
+    libssh2_session_callback_set(session, LIBSSH2_CALLBACK_X11,
+                                 reinterpret_cast<void*>(&libssh2X11OpenTrampoline));
+    x11RegistryAdd(session, this);
+
     const qint64 deadline = nowMs() + effTimeout;
     const int rc = retryEagain([&] {
         return libssh2_session_handshake(session, st->fd);
@@ -1889,6 +1991,7 @@ Outcome Libssh2Engine::finishConnect(const QString& hostForLog, int port,
                 : QStringLiteral("The SSH handshake with %1:%2 failed.").arg(hostForLog).arg(port),
             libssh2ErrorText(session, rc),
             QStringLiteral("Verify that the server is an SSH server and that the port is correct."));
+        x11RegistryRemove(session);
         libssh2_session_free(session);
         if (st->ownsFd && st->fd != LIBSSH2_INVALID_SOCKET) {
             closeSocket(st->fd);
@@ -2404,6 +2507,41 @@ EngineInfo Libssh2Engine::negotiatedInfo() const
 void Libssh2Engine::setPreferredAuthOrder(bool agentFirst)
 {
     m_agentFirst = agentFirst; // recorded; explicit authenticate() drives the order
+}
+
+// ---------------------------------------------------------------------------
+// KEX preference + X11 forwarding
+// ---------------------------------------------------------------------------
+void Libssh2Engine::setKexAlgorithms(const QString& list)
+{
+    const QString trimmed = list.trimmed();
+    if (trimmed.isEmpty())
+        return;
+    m_kexPreference = trimmed; // applied in finishConnect() before the handshake
+}
+
+void Libssh2Engine::enqueueX11Channel(LIBSSH2_CHANNEL* channel)
+{
+    if (!channel)
+        return;
+    QMutexLocker lock(&m_x11Mutex);
+    m_x11Pending.append(channel);
+}
+
+std::unique_ptr<IChannel> Libssh2Engine::acceptX11(int timeoutMs, QString* err)
+{
+    Q_UNUSED(timeoutMs);
+    Q_UNUSED(err);
+    LIBSSH2_CHANNEL* chan = nullptr;
+    {
+        QMutexLocker lock(&m_x11Mutex);
+        if (!m_x11Pending.isEmpty())
+            chan = m_x11Pending.takeFirst();
+    }
+    if (!chan)
+        return nullptr;
+    LOG_SSH(QStringLiteral("libssh2[%1] accepted inbound X11 channel").arg(m_state->connId));
+    return std::make_unique<Libssh2Channel>(m_state, chan, ChannelKind::X11);
 }
 
 } // namespace eclipse

@@ -54,6 +54,9 @@ public:
     int sendKeepAlive() override;
     EngineInfo negotiatedInfo() const override;
 
+    void setKexAlgorithms(const QString& list) override;
+    std::unique_ptr<IChannel> acceptX11(int timeoutMs, QString* err) override;
+
     void setIdentityPath(const QString& path);
     void setKnownHostsPath(const QString& path);
     void setCompression(bool enabled);
@@ -65,13 +68,16 @@ public:
 private:
     Outcome finishConnect(const QString& hostForLog, int port,
                           const std::function<void(const HostKeyInfo&)>& hostKeyCb);
+    void registerX11Channel(ssh_channel_struct* shellChannel);
 
     ssh_session_struct* m_session = nullptr;
     QString m_identityPath;
     QString m_knownHostsPath;
+    QString m_kexPreference;
     int m_ownedFd = -1;
     HostKeyInfo m_lastHostKey;
     QVector<QPair<QString, int>> m_remoteListeners;
+    QVector<ssh_channel_struct*> m_x11RequestChannels; // shells with x11-req sent
     mutable std::recursive_mutex m_mutex;
 };
 
@@ -85,6 +91,7 @@ public:
     bool isEof() const override;
     Outcome openShell(int cols, int rows, const QStringList& env) override;
     Outcome openExecChannel(const QString& command) override;
+    Outcome requestX11(int screenNumber, const QString& authCookie, QString* err) override;
     int readStdout(char* buf, int len) override;
     int readStderr(char* buf, int len) override;
     int write(const char* buf, int len) override;

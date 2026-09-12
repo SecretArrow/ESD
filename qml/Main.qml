@@ -64,8 +64,8 @@ ApplicationWindow {
         case "app.command-runner": runnerDialog.openDialog(); break;
         case "app.forwarding": forwardDialog.openDialog(); break;
         case "app.diagnostics": diagnosticsDialog.openDialog(); break;
-        case "app.import-openssh": importExport.openImport(); break;
-        case "app.export-profiles": importExport.openExport(); break;
+        case "app.import-openssh": importDialog.openDialog(); break;
+        case "app.export-profiles": importDialog.openDialog(); break;
         case "app.about": aboutDialog.open(); break;
         case "app.close-tab": if (currentTab >= 0) App.sessions.closeSession(currentTab); break;
         case "app.command-palette": paletteDialog.openDialog(); break;
@@ -364,6 +364,7 @@ ApplicationWindow {
     }
     QuickConnectDialog { id: quickConnectDialog }
     ProfileDialog { id: profileDialog }
+    ImportDialog { id: importDialog }
     PaletteDialog { id: paletteDialog; onCommandPicked: (id) => root.runCommand(id) }
     ForwardDialog { id: forwardDialog }
     RunnerDialog { id: runnerDialog }

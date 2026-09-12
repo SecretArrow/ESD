@@ -31,6 +31,7 @@ class Settings : public QObject
     Q_PROPERTY(bool debugMode READ debugMode WRITE setDebugMode)
     Q_PROPERTY(QString updateChannel READ updateChannel WRITE setUpdateChannel)
     Q_PROPERTY(QString defaultEngine READ defaultEngine WRITE setDefaultEngine)
+    Q_PROPERTY(QString profilesSyncFolder READ profilesSyncFolder WRITE setProfilesSyncFolder NOTIFY profilesSyncFolderChanged)
 public:
     static Settings& instance();
 
@@ -87,6 +88,15 @@ public:
     QString credentialStorage() const;      // os | session | ask
     QString defaultEngine() const;          // auto | libssh | libssh2
     void setDefaultEngine(const QString& engine);
+
+    // Profiles sync folder / portable mode (key "profiles/syncFolder").
+    // When non-empty, the integrator points ProfileStore's storage at this
+    // folder (device-sync wiring lives in the app layer); empty = default
+    // per-user app data location. Exposed to QML as
+    // App.settings.profilesSyncFolder with profilesSyncFolderChanged.
+    QString profilesSyncFolder() const;
+    void setProfilesSyncFolder(const QString& folder);
+
     bool debugMode() const;
     QString updateChannel() const;          // stable | beta | nightly
 
@@ -94,6 +104,7 @@ public:
 
 signals:
     void changed(const QString& key);
+    void profilesSyncFolderChanged();
 
 private:
     Settings();

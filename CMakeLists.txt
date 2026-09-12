@@ -23,7 +23,10 @@ option(ECLIPSE_DEVELOPER_MODE     "Enable developer diagnostics UI"  ON)
 
 include(CompilerWarnings)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Sql Network Concurrent Widgets)
+# SerialPort is optional: serial console connections degrade to a stub when
+# the module is not installed (see src/net/SerialSession.*).
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Sql Network Concurrent Widgets
+    OPTIONAL_COMPONENTS SerialPort)
 qt_standard_project_setup()
 
 find_package(PkgConfig REQUIRED)

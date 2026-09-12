@@ -5,8 +5,11 @@
 #include <QDir>
 #include <QGuiApplication>
 #include <QFontMetricsF>
+#include <QHash>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QUrl>
+#include <utility>
 
 #include "../common/Utils.h"
 #include "../core/logging/Logger.h"
@@ -89,6 +92,12 @@ TermItem::TermItem(QQuickItem* parent)
         }
     });
     m_blinkTimer->start();
+
+    // Re-run an active find-in-buffer shortly after new output arrived.
+    m_searchRefreshTimer = new QTimer(this);
+    m_searchRefreshTimer->setSingleShot(true);
+    m_searchRefreshTimer->setInterval(250);
+    connect(m_searchRefreshTimer, &QTimer::timeout, this, [this]() { rerunSearch(false); });
 }
 
 SshSession* TermItem::session() const
@@ -120,12 +129,24 @@ void TermItem::setSession(SshSession* s)
     m_session = s;
     emit sessionChanged();
 
-    if (!m_vt)
+    if (!m_vt) {
         m_vt = std::make_shared<VtEmulator>(80, 24);
-
-    connect(m_vt.get(), &VtEmulator::damage, this, [this]() { update(); }, Qt::QueuedConnection);
-    connect(m_vt.get(), &VtEmulator::outputReady, this, &TermItem::writeOut, Qt::QueuedConnection);
-    connect(m_vt.get(), &VtEmulator::titleChanged, this, &TermItem::titleChanged, Qt::QueuedConnection);
+        // Connect emulator signals once per emulator (setSession may be
+        // called again for a different session; re-connecting here would
+        // duplicate deliveries).
+        connect(m_vt.get(), &VtEmulator::damage, this, [this]() {
+            if (!m_searchTerm.isEmpty())
+                m_searchRefreshTimer->start();
+            update();
+        }, Qt::QueuedConnection);
+        connect(m_vt.get(), &VtEmulator::outputReady, this, &TermItem::writeOut, Qt::QueuedConnection);
+        connect(m_vt.get(), &VtEmulator::titleChanged, this, &TermItem::titleChanged, Qt::QueuedConnection);
+        // Task 2-a: shell integration + sixel + find plumbing
+        connect(m_vt.get(), &VtEmulator::commandStarted, this, &TermItem::commandStarted, Qt::QueuedConnection);
+        connect(m_vt.get(), &VtEmulator::commandFinished, this, &TermItem::commandFinished, Qt::QueuedConnection);
+        connect(m_vt.get(), &VtEmulator::shellIntegrationChanged, this, &TermItem::shellIntegrationChanged, Qt::QueuedConnection);
+        connect(m_vt.get(), &VtEmulator::sixelImageReady, this, &TermItem::addSixelThumbnail, Qt::QueuedConnection);
+    }
 
     if (m_session) {
         connect(m_session, &SshSession::terminalOpened, this, &TermItem::attachChannel, Qt::QueuedConnection);
@@ -159,6 +180,160 @@ void TermItem::setSession(SshSession* s)
 QString TermItem::title() const
 {
     return m_vt ? m_vt->terminalTitle() : QString();
+}
+
+// ---------------------------------------------------------------------------
+// find-in-buffer (Task 2-a)
+// ---------------------------------------------------------------------------
+void TermItem::setSearchTerm(const QString& term)
+{
+    if (m_searchTerm == term)
+        return;
+    m_searchTerm = term;
+    emit searchTermChanged();
+    rerunSearch(true);
+}
+
+void TermItem::setSearchCaseSensitive(bool on)
+{
+    if (m_searchCaseSensitive == on)
+        return;
+    m_searchCaseSensitive = on;
+    emit searchCaseSensitiveChanged();
+    rerunSearch(false);
+}
+
+bool TermItem::shellIntegrationActive() const
+{
+    return m_vt ? m_vt->shellIntegrationActive() : false;
+}
+
+void TermItem::rerunSearch(bool jumpToFirst)
+{
+    if (!m_vt)
+        return;
+    const int prevRow = (m_currentMatch >= 0 && m_currentMatch < m_matches.size())
+                            ? m_matches[m_currentMatch].first : -1;
+    m_matches = m_searchTerm.isEmpty()
+                    ? QVector<QPair<int, int>>()
+                    : m_vt->find(m_searchTerm, m_searchCaseSensitive);
+    if (m_matches.isEmpty()) {
+        m_currentMatch = -1;
+    } else if (jumpToFirst || prevRow < 0) {
+        m_currentMatch = 0;
+        scrollToMatchRow(m_matches.first().first);
+    } else {
+        // Keep the nearest match at/after the previously highlighted row.
+        int idx = 0;
+        while (idx < m_matches.size() && m_matches[idx].first < prevRow)
+            ++idx;
+        if (idx >= m_matches.size())
+            idx = m_matches.size() - 1;
+        m_currentMatch = idx;
+    }
+    emit matchInfoChanged();
+    update();
+}
+
+void TermItem::findNext()
+{
+    if (m_matches.isEmpty())
+        return;
+    m_currentMatch = (m_currentMatch + 1) % m_matches.size();
+    scrollToMatchRow(m_matches[m_currentMatch].first);
+    emit matchInfoChanged();
+    update();
+}
+
+void TermItem::findPrevious()
+{
+    if (m_matches.isEmpty())
+        return;
+    m_currentMatch = m_currentMatch <= 0 ? m_matches.size() - 1 : m_currentMatch - 1;
+    scrollToMatchRow(m_matches[m_currentMatch].first);
+    emit matchInfoChanged();
+    update();
+}
+
+void TermItem::endSearch()
+{
+    m_matches.clear();
+    m_currentMatch = -1;
+    emit matchInfoChanged();
+    update();
+}
+
+void TermItem::scrollToMatchRow(int absoluteRow)
+{
+    if (!m_vt)
+        return;
+    const int scrollback = m_vt->scrollbackCount();
+    const int rows = effectiveRows();
+    if (absoluteRow >= scrollback) {
+        m_scrollOffset = 0; // live screen
+    } else {
+        // Show the match about a third of the way down the viewport.
+        m_scrollOffset = qBound(0, scrollback - absoluteRow - rows / 3, scrollback);
+    }
+    update();
+}
+
+// ---------------------------------------------------------------------------
+// OSC 133 shell integration (Task 2-a)
+// ---------------------------------------------------------------------------
+void TermItem::jumpToPreviousCommand()
+{
+    if (!m_vt)
+        return;
+    const int scrollback = m_vt->scrollbackCount();
+    const int top = scrollback - qBound(0, m_scrollOffset, scrollback);
+    const int target = m_vt->previousPromptRow(top);
+    if (target < 0)
+        return;
+    m_scrollOffset = target >= scrollback ? 0 : qBound(0, scrollback - target, scrollback);
+    update();
+}
+
+void TermItem::jumpToNextCommand()
+{
+    if (!m_vt)
+        return;
+    const int scrollback = m_vt->scrollbackCount();
+    const int top = scrollback - qBound(0, m_scrollOffset, scrollback);
+    const int target = m_vt->nextPromptRow(top);
+    if (target < 0)
+        return;
+    m_scrollOffset = target >= scrollback ? 0 : qBound(0, scrollback - target, scrollback);
+    update();
+}
+
+// ---------------------------------------------------------------------------
+// sixel previews (Task 2-a; full in-buffer rendering is deferred)
+// ---------------------------------------------------------------------------
+void TermItem::addSixelThumbnail(const QImage& image)
+{
+    if (image.isNull())
+        return;
+    emit sixelImageReady(image);
+    const QString path = utils::uniqueTempFile(QStringLiteral("sixel"), QStringLiteral(".png"));
+    if (path.isEmpty() || !image.save(path, "PNG")) {
+        LOG_DEBUG(QStringLiteral("sixel image could not be saved for preview"));
+        return;
+    }
+    m_sixelThumbnails.append(QUrl::fromLocalFile(path).toString());
+    while (m_sixelThumbnails.size() > 8)
+        m_sixelThumbnails.removeFirst();
+    emit sixelThumbnailsChanged();
+}
+
+void TermItem::clearSixelThumbnails()
+{
+    for (const QVariant& v : std::as_const(m_sixelThumbnails))
+        utils::removeTempFile(QUrl(v.toString()).toLocalFile());
+    if (m_sixelThumbnails.isEmpty())
+        return;
+    m_sixelThumbnails.clear();
+    emit sixelThumbnailsChanged();
 }
 
 void TermItem::attachChannel(int cid)
@@ -288,8 +463,34 @@ void TermItem::paint(QPainter* painter)
     QFontMetricsF fm(m_font);
     const qreal pad = 4;
 
+    // find-in-buffer: map visible absolute rows -> (startCol, endCol inclusive)
+    QHash<int, QVector<QPair<int, int>>> matchHighlights;
+    const int termLen = qMax(1, int(m_searchTerm.size()));
+    if (!m_matches.isEmpty()) {
+        const int topAbs = scrollback - viewOffset;
+        const int bottomAbs = topAbs + rows - 1;
+        for (int i = 0; i < m_matches.size(); ++i) {
+            const int row = m_matches[i].first;
+            if (row < topAbs)
+                continue;
+            if (row > bottomAbs)
+                break;
+            matchHighlights[row].append(QPair<int, int>(m_matches[i].second,
+                                                        m_matches[i].second + termLen - 1));
+        }
+    }
+
     for (int r = 0; r < rows; ++r) {
         const int lineIndex = r - viewOffset; // negative = scrollback region
+        const int absRow = scrollback + r - viewOffset;
+
+        // OSC 133 shell-integration prompt marker (subtle left edge)
+        if (m_vt->rowMark(absRow) == VtEmulator::RowMark::PromptStart)
+            painter->fillRect(QRectF(0, pad + r * m_cellHeight, 2, m_cellHeight),
+                              QColor(0x5b, 0x8d, 0xef, 170));
+
+        const auto hlIt = matchHighlights.constFind(absRow);
+
         for (int c = 0; c < cols; ++c) {
             VtEmulator::Cell cell;
             bool inScrollback = false;
@@ -307,6 +508,22 @@ void TermItem::paint(QPainter* painter)
             QColor bg = cell.bg;
             if (cell.reverse)
                 std::swap(fg, bg);
+
+            // find-in-buffer highlight (selection below wins when both apply)
+            if (hlIt != matchHighlights.constEnd()) {
+                for (const auto& span : *hlIt) {
+                    if (c < span.first || c > span.second)
+                        continue;
+                    const bool current =
+                        m_currentMatch >= 0 && m_currentMatch < m_matches.size()
+                        && m_matches[m_currentMatch].first == absRow
+                        && c >= m_matches[m_currentMatch].second
+                        && c <= m_matches[m_currentMatch].second + termLen - 1;
+                    bg = current ? QColor(0xf0, 0x9a, 0x3a, 170)   // orange: current match
+                                 : QColor(0xe2, 0xb1, 0x2c, 90);   // amber: all matches
+                    break;
+                }
+            }
 
             const QPointF origin(pad + c * m_cellWidth, pad + r * m_cellHeight);
             const QRectF cellRect(origin, QSizeF(m_cellWidth, m_cellHeight));

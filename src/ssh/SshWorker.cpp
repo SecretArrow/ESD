@@ -1,6 +1,9 @@
 #include "SshWorker.h"
 
 #include <QHostAddress>
+#include <QHostInfo>
+#include <QLocalSocket>
+#include <QRandomGenerator>
 #include <QTcpSocket>
 #include <QThread>
 
@@ -33,6 +36,128 @@ QString sessionStateName(SessionState s)
     }
     return QStringLiteral("Unknown");
 }
+
+// ---------------------------------------------------------------------------
+// X11 helpers (anonymous namespace)
+// ---------------------------------------------------------------------------
+namespace {
+
+constexpr int kMaxX11Channels = 8;
+constexpr int kMaxX11PreambleBytes = 64 * 1024; // never stall on a bogus stream
+
+inline int pad4(int n) { return (4 - (n & 3)) & 3; }
+
+// Parsed DISPLAY value: "[host]:display[.screen]", "unix:n", "/path:n", "n".
+struct X11DisplayTarget
+{
+    bool valid = false;
+    bool local = true;
+    QString host;
+    int display = 0;
+    int screen = 0;
+};
+
+X11DisplayTarget parseX11Display(const QString& value)
+{
+    X11DisplayTarget t;
+    const QString s = value.trimmed();
+    if (s.isEmpty())
+        return t;
+    const int colon = s.lastIndexOf(QLatin1Char(':'));
+    if (colon < 0) {
+        // Bare number: treat as local display n.
+        bool ok = false;
+        const int n = s.toInt(&ok);
+        if (!ok || n < 0)
+            return t;
+        t.valid = true;
+        t.display = n;
+        return t;
+    }
+    QString hostPart = s.left(colon);
+    QString numPart = s.mid(colon + 1);
+    const int dot = numPart.indexOf(QLatin1Char('.'));
+    if (dot >= 0) {
+        t.screen = numPart.mid(dot + 1).toInt();
+        numPart = numPart.left(dot);
+    }
+    bool ok = false;
+    const int n = numPart.toInt(&ok);
+    if (!ok || n < 0)
+        return t;
+    t.display = n;
+    t.valid = true;
+    if (!hostPart.isEmpty() && hostPart.at(0) == QLatin1Char('/')) {
+        t.local = true; // macOS launchd-style socket path
+        t.host.clear();
+        return t;
+    }
+    t.local = hostPart.isEmpty() || hostPart.compare(QLatin1String("unix"), Qt::CaseInsensitive) == 0
+              || hostPart.compare(QLatin1String("localhost"), Qt::CaseInsensitive) == 0;
+    t.host = t.local ? QString() : hostPart;
+    return t;
+}
+
+// Scan an Xauthority file for the MIT-MAGIC-COOKIE-1 of one display.
+// Record format: u16 family, u16 addrLen, addr, u16 numLen, number,
+// u16 nameLen, name, u16 dataLen, data - all big-endian (network order).
+QByteArray loadXauthorityCookie(const QString& path, int displayNumber)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    const QByteArray all = f.readAll();
+    const QByteArray displayStr = QByteArray::number(displayNumber);
+    const QByteArray hostName = QHostInfo::localHostName().toUtf8();
+
+    auto u16 = [&all](int p, bool* ok) -> int {
+        if (p < 0 || p + 2 > all.size()) {
+            *ok = false;
+            return 0;
+        }
+        *ok = true;
+        return (quint8(all.at(p)) << 8) | quint8(all.at(p + 1));
+    };
+
+    int pos = 0;
+    while (pos + 2 <= all.size()) {
+        bool ok = false;
+        const int family = u16(pos, &ok);
+        if (!ok) break;
+        pos += 2;
+        const int addrLen = u16(pos, &ok); if (!ok) break;
+        pos += 2;
+        if (pos + addrLen > all.size()) break;
+        const QByteArray addr = all.mid(pos, addrLen);
+        pos += addrLen;
+        const int numLen = u16(pos, &ok); if (!ok) break;
+        pos += 2;
+        if (pos + numLen > all.size()) break;
+        const QByteArray num = all.mid(pos, numLen);
+        pos += numLen;
+        const int nameLen = u16(pos, &ok); if (!ok) break;
+        pos += 2;
+        if (pos + nameLen > all.size()) break;
+        const QByteArray name = all.mid(pos, nameLen);
+        pos += nameLen;
+        const int dataLen = u16(pos, &ok); if (!ok) break;
+        pos += 2;
+        if (pos + dataLen > all.size()) break;
+        const QByteArray data = all.mid(pos, dataLen);
+        pos += dataLen;
+
+        if (name != QByteArrayLiteral("MIT-MAGIC-COOKIE-1") || data.isEmpty())
+            continue;
+        const bool numberMatch = num == displayStr;
+        const bool hostMatch = family == 65535 /*FamilyWild*/
+                               || (family == 256 /*FamilyLocal*/ && !hostName.isEmpty() && addr == hostName);
+        if (numberMatch && hostMatch)
+            return data;
+    }
+    return {};
+}
+
+} // namespace
 
 SshWorker::SshWorker(ConnectionProfile profile, QObject* parent)
     : QObject(parent)
@@ -104,6 +229,10 @@ void SshWorker::startConnect()
         }
     }
 #endif
+
+    // KEX preference (best effort; engines log rejections, never abort).
+    if (!m_profile.kexAlgorithms.isEmpty())
+        m_engine->setKexAlgorithms(m_profile.kexAlgorithms);
 
     // 2. Establish transport (jump chain first, then engine connect)
     setState(SessionState::Connecting);
@@ -293,6 +422,8 @@ void SshWorker::teardown(const QString& reason, bool byRequest)
     for (auto it = m_channels.begin(); it != m_channels.end(); ++it) {
         if (it->socket)
             it->socket->deleteLater();
+        if (it->lsocket)
+            it->lsocket->deleteLater();
     }
     m_channels.clear();
     m_forwardServers.clear();
@@ -321,6 +452,16 @@ void SshWorker::openTerminal(int cols, int rows)
     if (!oc.ok) {
         LOG_SSH_ERR(QStringLiteral("shell request failed: %1").arg(oc.friendly));
         return;
+    }
+    if (m_profile.x11Forward) {
+        ensureX11Cookies();
+        QString xerr;
+        const Outcome x11 = channel->requestX11(m_profile.x11Screen, m_x11FakeCookie, &xerr);
+        if (!x11.ok)
+            LOG_SSH_ERR(QStringLiteral("X11 forwarding request failed: %1")
+                            .arg(x11.technical.isEmpty() ? x11.friendly : x11.technical));
+        else
+            LOG_SSH(QStringLiteral("X11 forwarding requested (screen %1)").arg(m_profile.x11Screen));
     }
     const int cid = m_nextChannelId++;
     ChannelEntry entry;
@@ -519,10 +660,29 @@ void SshWorker::pollTick()
         }
     }
 
+    // Accept inbound X11 channels (profile.x11Forward; the engines return
+    // nullptr quickly when nothing is pending or X11 was never requested).
+    pollX11();
+
     for (auto it = m_channels.begin(); it != m_channels.end();) {
         ChannelEntry& entry = it.value();
         IChannel* ch = entry.channel.get();
         if (!ch) {
+            it = m_channels.erase(it);
+            continue;
+        }
+
+        // Locally-dead X11 channels (display connection error/lost): reap.
+        if (entry.dead) {
+            if (entry.socket) {
+                entry.socket->abort();
+                entry.socket->deleteLater();
+            }
+            if (entry.lsocket) {
+                entry.lsocket->abort();
+                entry.lsocket->deleteLater();
+            }
+            emit channelClosed(it.key());
             it = m_channels.erase(it);
             continue;
         }
@@ -574,6 +734,8 @@ void SshWorker::pollTick()
                 emit channelData(it.key(), data, false);
             else if (entry.kind == ChannelEntry::Exec)
                 emit execOutput(entry.execTag, data, false);
+            else if (entry.isX11)
+                writeX11Data(entry, data); // cookie rewrite on the setup packet
             else if (entry.socket && entry.socket->state() == QAbstractSocket::ConnectedState) {
                 entry.socket->write(data);
                 entry.socket->flush();
@@ -593,8 +755,12 @@ void SshWorker::pollTick()
         }
 
         // Socket -> channel
-        if (entry.socket && entry.handshakeDone) {
-            const QByteArray up = entry.socket->readAll();
+        if (entry.handshakeDone) {
+            QByteArray up;
+            if (entry.socket)
+                up = entry.socket->readAll();
+            else if (entry.lsocket)
+                up = entry.lsocket->readAll();
             if (!up.isEmpty())
                 ch->write(up.constData(), up.size());
         }
@@ -608,6 +774,10 @@ void SshWorker::pollTick()
             if (entry.socket) {
                 entry.socket->flush();
                 entry.socket->disconnectFromHost();
+            }
+            if (entry.lsocket) {
+                entry.lsocket->flush();
+                entry.lsocket->disconnectFromServer();
             }
             it = m_channels.erase(it);
             continue;
@@ -640,6 +810,218 @@ void SshWorker::updateLatency()
             break;
         QThread::msleep(4);
     }
+}
+
+// ---------------------------------------------------------------------------
+// X11 forwarding
+// ---------------------------------------------------------------------------
+void SshWorker::ensureX11Cookies()
+{
+    if (m_x11FakeCookie.isEmpty()) {
+        // 16 ASCII hex characters: transmitted verbatim in the x11-req cookie
+        // string and returned verbatim as the auth data of the first X11
+        // setup packet, which makes the local rewrite a fixed-size replace.
+        static const char kHex[] = "0123456789abcdef";
+        QString cookie;
+        cookie.reserve(16);
+        for (int i = 0; i < 16; ++i)
+            cookie.append(QLatin1Char(kHex[QRandomGenerator::system()->bounded(16)]));
+        m_x11FakeCookie = cookie;
+    }
+    if (!m_x11CookieResolved) {
+        m_x11CookieResolved = true;
+        const X11DisplayTarget target = parseX11Display(qEnvironmentVariable("DISPLAY"));
+        const int display = target.valid ? target.display : qMax(0, m_profile.x11Screen);
+        QString xauth = qEnvironmentVariable("XAUTHORITY");
+        if (xauth.isEmpty())
+            xauth = utils::expandTildePath(QStringLiteral("~/.Xauthority"));
+        m_x11RealCookie = loadXauthorityCookie(xauth, display);
+        if (m_x11RealCookie.isEmpty())
+            LOG_SSH(QStringLiteral("X11: no MIT-MAGIC-COOKIE-1 entry for display :%1 in %2 - "
+                                   "remote X clients may be rejected unless access control is "
+                                   "disabled on the local display (e.g. xhost +SI:localuser:$USER)")
+                        .arg(display).arg(xauth));
+    }
+}
+
+void SshWorker::pollX11()
+{
+    if (!m_profile.x11Forward || !m_engine || !m_engine->isConnected())
+        return;
+    int active = 0;
+    for (const ChannelEntry& e : m_channels)
+        if (e.isX11)
+            ++active;
+    if (active >= kMaxX11Channels)
+        return;
+
+    QString xerr;
+    std::unique_ptr<IChannel> x11 = m_engine->acceptX11(0, &xerr);
+    if (!x11)
+        return;
+
+    ensureX11Cookies();
+    const int cid = m_nextChannelId++;
+    ChannelEntry entry;
+    entry.kind = ChannelEntry::Pipe;
+    entry.isX11 = true;
+    entry.handshakeDone = true; // socket -> channel pump is active immediately
+    entry.channel = std::shared_ptr<IChannel>(std::move(x11));
+    if (!openLocalX11Socket(cid, entry)) {
+        // Local display unreachable: log + close the remote channel, never crash.
+        LOG_SSH_ERR(QStringLiteral("X11 channel %1 closed: local display connection failed").arg(cid));
+        entry.channel->close();
+        emit channelClosed(cid);
+        return;
+    }
+    m_channels.insert(cid, std::move(entry));
+    LOG_SSH(QStringLiteral("X11 channel %1: forwarding to the local display").arg(cid));
+}
+
+bool SshWorker::openLocalX11Socket(int cid, ChannelEntry& entry)
+{
+    const X11DisplayTarget target = parseX11Display(qEnvironmentVariable("DISPLAY"));
+    const int display = target.valid ? target.display : qMax(0, m_profile.x11Screen);
+
+    // Failure/teardown marker: only flags the entry; the pump reaps it on its
+    // next tick (never erases from m_channels inside a socket signal).
+    auto markDead = [this, cid](const QString& why) {
+        auto it = m_channels.constFind(cid);
+        if (it == m_channels.constEnd())
+            return;
+        LOG_SSH_ERR(QStringLiteral("X11 channel %1 dropped: %2").arg(cid).arg(why));
+        it->dead = true;
+        if (it->channel)
+            it->channel->close();
+    };
+
+    if (target.valid && !target.local) {
+        auto* tcp = new QTcpSocket(this);
+        tcp->connectToHost(target.host, quint16(6000 + display));
+        QObject::connect(tcp, &QTcpSocket::errorOccurred, this, [markDead](QAbstractSocket::SocketError e) {
+            markDead(QStringLiteral("display TCP error (%1)").arg(int(e)));
+        });
+        QObject::connect(tcp, &QTcpSocket::disconnected, this, [markDead]() {
+            markDead(QStringLiteral("display connection closed"));
+        });
+        entry.socket = tcp;
+        return true;
+    }
+
+#ifdef _WIN32
+    // No Unix-domain X11 sockets on Windows: VcXsrv/X410 listen on TCP
+    // 127.0.0.1:6000+<display> (profile.x11Screen is the display number).
+    Q_UNUSED(markDead);
+    auto* tcp = new QTcpSocket(this);
+    tcp->connectToHost(QStringLiteral("127.0.0.1"), quint16(6000 + display));
+    QObject::connect(tcp, &QTcpSocket::errorOccurred, this, [cid](QAbstractSocket::SocketError e) {
+        LOG_SSH_ERR(QStringLiteral("X11 channel %1: local display error (%2)").arg(cid).arg(int(e)));
+    });
+    entry.socket = tcp;
+    return true;
+#else
+    auto* local = new QLocalSocket(this);
+    local->connectToServer(QStringLiteral("/tmp/.X11-unix/X%1").arg(display));
+    QObject::connect(local, &QLocalSocket::errorOccurred, this, [markDead](QLocalSocket::LocalSocketError e) {
+        markDead(QStringLiteral("display socket error (%1)").arg(int(e)));
+    });
+    QObject::connect(local, &QLocalSocket::disconnected, this, [markDead]() {
+        markDead(QStringLiteral("display connection closed"));
+    });
+    entry.lsocket = local;
+    return true;
+#endif
+}
+
+bool SshWorker::x11LocalConnected(const ChannelEntry& entry)
+{
+    if (entry.socket)
+        return entry.socket->state() == QAbstractSocket::ConnectedState;
+    if (entry.lsocket)
+        return entry.lsocket->state() == QLocalSocket::ConnectedState;
+    return false;
+}
+
+void SshWorker::writeX11Raw(ChannelEntry& entry, const QByteArray& data)
+{
+    if (data.isEmpty())
+        return;
+    if (entry.socket) {
+        entry.socket->write(data);
+        entry.socket->flush();
+    } else if (entry.lsocket) {
+        entry.lsocket->write(data);
+        entry.lsocket->flush();
+    }
+}
+
+void SshWorker::writeX11Data(ChannelEntry& entry, const QByteArray& data)
+{
+    if (!entry.x11RewriteDone) {
+        entry.x11Preamble += data;
+        tryFlushX11Preamble(entry);
+        return;
+    }
+    writeX11Raw(entry, data);
+}
+
+void SshWorker::tryFlushX11Preamble(ChannelEntry& entry)
+{
+    const QByteArray& p = entry.x11Preamble;
+    if (p.isEmpty() || !x11LocalConnected(entry))
+        return;
+
+    // X11 initial setup request (client -> server): byte order, 2x u16
+    // protocol version, u16 auth-protocol length, u16 auth-data length,
+    // u16 unused, then the strings, each padded to 4 bytes.
+    if (p.at(0) != 'l' && p.at(0) != 'B') {
+        writeX11Raw(entry, p); // not a setup packet - pass through untouched
+        entry.x11RewriteDone = true;
+        entry.x11Preamble.clear();
+        return;
+    }
+    if (p.size() < 12)
+        return;
+    const bool little = p.at(0) == 'l';
+    auto u16 = [&p, little](int off) -> int {
+        return little ? (quint8(p.at(off)) | (quint8(p.at(off + 1)) << 8))
+                      : ((quint8(p.at(off)) << 8) | quint8(p.at(off + 1)));
+    };
+    const int protoLen = u16(6);
+    const int dataLen = u16(8);
+    if (protoLen < 0 || dataLen < 0 || protoLen > 4096 || dataLen > 4096) {
+        writeX11Raw(entry, p); // implausible lengths - pass through untouched
+        entry.x11RewriteDone = true;
+        entry.x11Preamble.clear();
+        return;
+    }
+    const int need = 12 + pad4(protoLen) + pad4(dataLen);
+    if (p.size() < need) {
+        if (p.size() > kMaxX11PreambleBytes) { // safety valve: never stall
+            writeX11Raw(entry, p);
+            entry.x11RewriteDone = true;
+            entry.x11Preamble.clear();
+        }
+        return;
+    }
+
+    const QByteArray protoName = p.mid(12, protoLen);
+    const int dataOffset = 12 + protoLen + pad4(protoLen);
+    const QByteArray authData = p.mid(dataOffset, dataLen);
+    if (protoName == QByteArrayLiteral("MIT-MAGIC-COOKIE-1")
+        && !m_x11RealCookie.isEmpty()
+        && dataLen == m_x11RealCookie.size()
+        && authData == m_x11FakeCookie.toLatin1()) {
+        // Swap the fake cookie (sent in x11-req) for the real local one.
+        QByteArray out = p;
+        out.replace(dataOffset, dataLen, m_x11RealCookie);
+        writeX11Raw(entry, out);
+        LOG_SSH(QStringLiteral("X11: rewrote fake auth cookie to the real local cookie"));
+    } else {
+        writeX11Raw(entry, p);
+    }
+    entry.x11RewriteDone = true;
+    entry.x11Preamble.clear();
 }
 
 } // namespace eclipse

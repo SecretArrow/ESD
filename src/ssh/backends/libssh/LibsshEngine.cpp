@@ -7,6 +7,8 @@
 
 #include <fcntl.h>
 #include <sys/stat.h>
+
+#include <vector>
 #ifdef _WIN32
 #include <io.h>
 #else
@@ -111,6 +113,36 @@ void LibsshEngine::setCompression(bool enabled)
     if (!m_session)
         return;
     ssh_options_set(m_session, SSH_OPTIONS_COMPRESSION, enabled ? "yes" : "no");
+}
+
+void LibsshEngine::setKexAlgorithms(const QString& list)
+{
+    if (list.trimmed().isEmpty())
+        return;
+    m_kexPreference = list.trimmed();
+    if (!m_session)
+        return;
+    const QStringList names = m_kexPreference.split(QLatin1Char(','), Qt::SkipEmptyParts);
+    const QVector<QByteArray> blobs = [names] {
+        QVector<QByteArray> out;
+        out.reserve(names.size());
+        for (const QString& n : names)
+            out.append(n.trimmed().toUtf8());
+        return out;
+    }();
+    std::vector<const char*> raw;
+    raw.reserve(size_t(blobs.size() + 1));
+    for (const QByteArray& b : blobs)
+        raw.push_back(b.constData());
+    raw.push_back(nullptr);
+    // SSH_OPTIONS_KEY_EXCHANGE (libssh.h:397) takes a NUL-terminated
+    // `const char **` list (prototype: ssh_options_set, libssh.h:670).
+    // Best effort: a rejected preference list is logged, never fatal.
+    if (ssh_options_set(m_session, SSH_OPTIONS_KEY_EXCHANGE, raw.data()) != SSH_OK)
+        LOG_SSH_ERR(QStringLiteral("[libssh] KEX preference rejected: %1 (%2)")
+                        .arg(m_kexPreference, QString::fromLatin1(ssh_get_error(m_session))));
+    else
+        LOG_SSH(QStringLiteral("[libssh] KEX preference set: %1").arg(m_kexPreference));
 }
 
 Outcome LibsshEngine::connect(const QString& host, int port, int timeoutMs,
@@ -400,6 +432,36 @@ std::unique_ptr<IChannel> LibsshEngine::acceptRemoteForward(int timeoutMs, QStri
     return nullptr;
 }
 
+void LibsshEngine::registerX11Channel(ssh_channel_struct* shellChannel)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    if (shellChannel && !m_x11RequestChannels.contains(shellChannel))
+        m_x11RequestChannels.append(shellChannel);
+}
+
+std::unique_ptr<IChannel> LibsshEngine::acceptX11(int timeoutMs, QString* err)
+{
+    Q_UNUSED(err);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    if (!m_session || m_x11RequestChannels.isEmpty())
+        return nullptr;
+    // ssh_channel_accept_x11 (libssh.h:456) polls the channels that requested
+    // X11 forwarding via ssh_channel_request_x11 (libssh.h:502).
+    for (int i = 0; i < m_x11RequestChannels.size(); ++i) {
+        ssh_channel shell = m_x11RequestChannels.at(i);
+        if (!shell || ssh_channel_is_closed(shell)) {
+            m_x11RequestChannels.removeAt(i);
+            --i;
+            continue;
+        }
+        if (ssh_channel x11 = ssh_channel_accept_x11(shell, timeoutMs > 0 ? timeoutMs : 0)) {
+            LOG_SSH(QStringLiteral("[libssh] accepted inbound X11 channel"));
+            return std::make_unique<LibsshChannel>(this, x11);
+        }
+    }
+    return nullptr;
+}
+
 void LibsshEngine::remoteForwardCancel(const QString& bindAddress, int port)
 {
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
@@ -426,7 +488,21 @@ EngineInfo LibsshEngine::negotiatedInfo() const
     if (!m_session)
         return info;
     if (m_lastHostKey.isValid())
-        info.hostKeyAlgo = m_lastHostKey.keyType;
+        info.hostKeyAlgo = m_lastHostKey.keyType; // key type; libssh exposes no separate
+                                                  // negotiated hostkey-algorithm getter
+#if defined(LIBSSH_VERSION_INT) && LIBSSH_VERSION_INT >= SSH_VERSION_INT(0, 10, 0)
+    // Negotiated method names (libssh.h:872-876), added in libssh 0.10.
+    if (const char* kex = ssh_get_kex_algo(m_session))
+        info.kex = QString::fromLatin1(kex);
+    if (const char* c = ssh_get_cipher_in(m_session))
+        info.cipherIn = QString::fromLatin1(c);
+    if (const char* c = ssh_get_cipher_out(m_session))
+        info.cipherOut = QString::fromLatin1(c);
+    if (const char* m = ssh_get_hmac_in(m_session))
+        info.macIn = QString::fromLatin1(m);
+    if (const char* m = ssh_get_hmac_out(m_session))
+        info.macOut = QString::fromLatin1(m);
+#endif
     return info;
 }
 
@@ -463,6 +539,30 @@ Outcome LibsshChannel::openExecChannel(const QString& cmd)
 {
     if (ssh_channel_request_exec(m_channel, cmd.toUtf8().constData()) != SSH_OK)
         return libsshError(m_engine->rawSession(), QStringLiteral("The command could not be executed."));
+    return Outcome::success();
+}
+
+Outcome LibsshChannel::requestX11(int screenNumber, const QString& authCookie, QString* err)
+{
+    if (!m_channel || !m_engine) {
+        if (err)
+            *err = QStringLiteral("Channel is not open.");
+        return Outcome::fail(QStringLiteral("Channel is not open."));
+    }
+    // ssh_channel_request_x11(channel, single_connection, protocol, cookie,
+    // screen_number) - libssh.h:502. single_connection=0 keeps X11 forwarding
+    // alive for the whole session; a fake MIT-MAGIC-COOKIE-1 is sent so the
+    // worker can rewrite the first X11 setup packet to the real local cookie.
+    const QByteArray cookie = authCookie.toLatin1();
+    const int rc = ssh_channel_request_x11(m_channel, 0, "MIT-MAGIC-COOKIE-1",
+                                           cookie.constData(), screenNumber);
+    if (rc != SSH_OK) {
+        if (err)
+            *err = QString::fromLatin1(ssh_get_error(m_engine->rawSession()));
+        return Outcome::fail(QStringLiteral("The server rejected the X11 forwarding request."),
+                             QStringLiteral("ssh_channel_request_x11 rc=%1").arg(rc));
+    }
+    m_engine->registerX11Channel(m_channel);
     return Outcome::success();
 }
 

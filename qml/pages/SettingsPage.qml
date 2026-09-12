@@ -140,6 +140,22 @@ Rectangle {
                             model: ["auto (libssh)", "libssh", "libssh2"]
                             onActivated: (i) => App.settings.defaultEngine = ["auto","libssh","libssh2"][i]
                         }
+                        Label { text: qsTr("Profile sync folder (portable mode)"); color: Theme.text
+                            Layout.topMargin: 10 }
+                        Label { text: qsTr("When set, connection profiles are stored in this folder so they can sync across devices (Dropbox/Nextcloud/network drive). Leave empty to use the default application storage.")
+                            color: Theme.textMuted; font.pixelSize: 11; wrapMode: Text.Wrap; Layout.maximumWidth: 480 }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            TextField {
+                                id: syncFolderField
+                                Layout.fillWidth: true
+                                text: App.settings.profilesSyncFolder
+                                placeholderText: qsTr("e.g. /home/user/Sync/esd-profiles")
+                                onEditingFinished: App.settings.profilesSyncFolder = text
+                            }
+                            Button { text: qsTr("Clear"); flat: true
+                                onClicked: { syncFolderField.text = ""; App.settings.profilesSyncFolder = "" } }
+                        }
                     }
                 }
 
@@ -168,6 +184,10 @@ Rectangle {
                         }
                         Label { text: qsTr("Passwords and passphrases are never stored in plaintext.\nHost key verification cannot be disabled.")
                             color: Theme.textMuted; font.pixelSize: 11 }
+                        Label { text: qsTr("Post-quantum readiness"); font.weight: Font.DemiBold; color: Theme.text
+                            Layout.topMargin: 14 }
+                        Label { text: qsTr("OpenSSH 10.0 (April 2025) uses the hybrid post-quantum key exchange mlkem768x25519 by default. Eclipse SSH negotiates with the same algorithm list, but the bundled libssh/libssh2 engines do not yet implement post-quantum KEX — connections fall back to classical curves (curve25519 / ECDH). Run Diagnostics on a session to see the negotiated key exchange; a warning is shown when the connection is not post-quantum-ready. You can also set a KEX preference per profile (Advanced).")
+                            color: Theme.textMuted; font.pixelSize: 11; wrapMode: Text.Wrap; Layout.maximumWidth: 500 }
                     }
                 }
 

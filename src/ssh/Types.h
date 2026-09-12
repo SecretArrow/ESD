@@ -89,7 +89,7 @@ struct SftpEntry
     SftpAttrs attrs;
 };
 
-enum class ChannelKind { Shell, Exec, DirectTcpip, RemoteForwardAccepted };
+enum class ChannelKind { Shell, Exec, DirectTcpip, RemoteForwardAccepted, X11 };
 
 // Opaque channel identifier used by the worker pump.
 using ChannelId = int;
