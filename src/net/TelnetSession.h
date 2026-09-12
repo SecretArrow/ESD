@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QAbstractSocket>
 #include <QByteArray>
 #include <QObject>
 #include <QString>

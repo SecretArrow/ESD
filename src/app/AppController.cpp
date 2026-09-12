@@ -666,11 +666,13 @@ QVariantMap AppController::exportProfileBundle(const QUrl& fileUrl, const QStrin
 {
     const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
 #ifdef ECLIPSE_HAVE_PROFILE_BUNDLE
-    // Contract (agent 2-b): static QString ProfileBundle::exportBundle(
-    //   const QVector<ConnectionProfile>& profiles, const QString& path,
-    //   const QString& passphrase);  empty QString = success.
-    const QString err = ProfileBundle::exportBundle(ProfileStore::instance().all(), path, passphrase);
-    return importResult(err.isEmpty(), err.isEmpty() ? ProfileStore::instance().count() : 0, 0, err);
+    // Real API (agent 2-b): static bool ProfileBundle::exportToFile(
+    //   const QString& path, const QList<ConnectionProfile>& profiles,
+    //   const QString& passphrase, QString* errorOut);
+    QString err;
+    const bool ok = ProfileBundle::exportToFile(path, ProfileStore::instance().all(),
+                                                passphrase, &err);
+    return importResult(ok, ok ? ProfileStore::instance().count() : 0, 0, err);
 #else
     LOG_WARN(QStringLiteral("Profile bundle export requested but ProfileBundle is not available yet"));
     return importResult(false, 0, 0,
@@ -682,11 +684,11 @@ QVariantMap AppController::importProfileBundle(const QUrl& fileUrl, const QStrin
 {
     const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
 #ifdef ECLIPSE_HAVE_PROFILE_BUNDLE
-    // Contract (agent 2-b): static QVector<ConnectionProfile>
-    // ProfileBundle::importBundle(const QString& path, const QString& passphrase,
-    //                             QString* errorOut).
+    // Real API (agent 2-b): static QList<ConnectionProfile>
+    // ProfileBundle::importFromFile(const QString& path, const QString& passphrase,
+    //                               QString* errorOut).
     QString err;
-    const QVector<ConnectionProfile> imported = ProfileBundle::importBundle(path, passphrase, &err);
+    const QVector<ConnectionProfile> imported = ProfileBundle::importFromFile(path, passphrase, &err);
     int added = 0;
     int skipped = 0;
     for (const ConnectionProfile& p : imported) {
