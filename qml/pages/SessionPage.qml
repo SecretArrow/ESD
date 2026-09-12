@@ -122,7 +122,7 @@ Rectangle {
                 spacing: 8
 
                 StatusDot {
-                    state: connBanner.st
+                    sessionState: connBanner.st
                     Layout.alignment: Qt.AlignVCenter
                 }
 

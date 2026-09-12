@@ -7,18 +7,20 @@ import Eclipse
 Rectangle {
     id: dot
 
-    property string state: "Idle"
+    // NOTE: must not be named `state` - that would clash with Item.state
+    // (duplicate property name = hard QML error, type becomes unavailable).
+    property string sessionState: "Idle"
 
-    readonly property bool busy: state === "Connecting" || state === "Authenticating"
-                                 || state === "Resolving" || state === "WaitingHostKey"
-                                 || state === "Disconnecting" || state === "Reconnecting"
-    readonly property bool bad: state === "Error" || state === "AuthFailed"
-                                || state === "HostKeyRejected"
+    readonly property bool busy: sessionState === "Connecting" || sessionState === "Authenticating"
+                                 || sessionState === "Resolving" || sessionState === "WaitingHostKey"
+                                 || sessionState === "Disconnecting" || sessionState === "Reconnecting"
+    readonly property bool bad: sessionState === "Error" || sessionState === "AuthFailed"
+                                || sessionState === "HostKeyRejected"
 
     width: 9
     height: 9
     radius: width / 2
-    color: state === "Connected" ? Theme.success
+    color: sessionState === "Connected" ? Theme.success
          : busy ? Theme.warning
          : bad ? Theme.error
          : Theme.textMuted

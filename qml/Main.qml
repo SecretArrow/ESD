@@ -287,7 +287,7 @@ ApplicationWindow {
 
                             contentItem: RowLayout {
                                 spacing: 8
-                                StatusDot { state: model.state }
+                                StatusDot { sessionState: model.state }
                                 ColumnLayout {
                                     spacing: 1
                                     Layout.fillWidth: true
@@ -437,7 +437,7 @@ ApplicationWindow {
                                     anchors.rightMargin: 6
                                     spacing: 8
 
-                                    StatusDot { state: model.state }
+                                    StatusDot { sessionState: model.state }
 
                                     Label {
                                         id: tabName
@@ -581,7 +581,7 @@ ApplicationWindow {
                 Rectangle { width: parent.width; height: 1; color: Theme.border }
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; spacing: 8
-                    StatusDot { state: currentSession ? currentSession.state : "Idle" }
+                    StatusDot { sessionState: currentSession ? currentSession.state : "Idle" }
                     Label {
                         text: {
                             if (!currentSession) return qsTr("Ready");

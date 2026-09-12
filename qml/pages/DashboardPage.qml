@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Eclipse
 
 // Landing page: hero, quick actions, stats strip, recent/favorite
 // connection cards with live session status dots, friendly empty state.
@@ -214,7 +215,7 @@ Rectangle {
                             anchors.margins: 10
                             spacing: 10
                             StatusDot {
-                                state: model.state
+                                sessionState: model.state
                                 Layout.alignment: Qt.AlignVCenter
                             }
                             ColumnLayout {
@@ -335,7 +336,7 @@ Rectangle {
                             anchors.margins: 10
                             spacing: 10
                             StatusDot {
-                                state: model.state
+                                sessionState: model.state
                                 Layout.alignment: Qt.AlignVCenter
                             }
                             ColumnLayout {

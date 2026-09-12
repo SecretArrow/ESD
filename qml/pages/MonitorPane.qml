@@ -57,7 +57,7 @@ Rectangle {
             // live connection state with the shared status dot
             StatusDot {
                 visible: session !== null
-                state: session ? session.state : "Idle"
+                sessionState: session ? session.state : "Idle"
                 Layout.alignment: Qt.AlignVCenter
             }
             Label {

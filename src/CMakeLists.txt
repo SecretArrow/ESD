@@ -181,8 +181,8 @@ set(ECLIPSE_QML_FILES
     ${CMAKE_SOURCE_DIR}/qml/dialogs/ArchiveViewerDialog.qml
     ${CMAKE_SOURCE_DIR}/qml/dialogs/ImportDialog.qml
     ${CMAKE_SOURCE_DIR}/qml/components/TerminalFindBar.qml
-    ${CMAKE_SOURCE_DIR}/qml/components/FlatButton.qml
-    ${CMAKE_SOURCE_DIR}/qml/components/StatusDot.qml
+    ${CMAKE_SOURCE_DIR}/qml/FlatButton.qml
+    ${CMAKE_SOURCE_DIR}/qml/StatusDot.qml
     ${CMAKE_SOURCE_DIR}/qml/pages/MonitorPane.qml
 )
 

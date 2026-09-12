@@ -35,6 +35,13 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Sql N
     OPTIONAL_COMPONENTS SerialPort)
 qt_standard_project_setup()
 
+# Qt 6.8+: register qmldir files for QML files in module subdirectories
+# (pages/, components/, dialogs/). Without this, Qt 6.10+ builds may fail
+# to resolve cross-directory module types at runtime ("X is not a type").
+if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
+    qt_policy(SET QTP0004 NEW)
+endif()
+
 find_package(PkgConfig REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
