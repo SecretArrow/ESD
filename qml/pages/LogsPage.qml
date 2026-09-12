@@ -12,11 +12,6 @@ Rectangle {
         Logs.setFilter(filterField.text, levelBox.currentIndex, categoryBox.currentText);
     }
 
-    // root-level so Component.onCompleted can reference it
-    function refreshFilter() {
-        Logs.setFilter(filterField.text, levelBox.currentIndex, categoryBox.currentText);
-    }
-
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 8
