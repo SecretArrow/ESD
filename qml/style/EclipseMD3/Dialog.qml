@@ -28,6 +28,4 @@ T.Dialog {
         border.width: 1
         border.color: ThemeBridge.outlineVariant
     }
-
-    contentItem: Item {}
 }

@@ -243,6 +243,17 @@ qt_add_resources(eclipse-ssh-desktop "icons"
 file(GLOB ECLIPSE_MD3_STYLE_FILES
     ${CMAKE_SOURCE_DIR}/qml/style/EclipseMD3/qmldir
     ${CMAKE_SOURCE_DIR}/qml/style/EclipseMD3/*.qml)
+# Absolute source paths require explicit resource aliases (Qt6 requirement).
+foreach(stylefile ${ECLIPSE_MD3_STYLE_FILES})
+    get_filename_component(stylename ${stylefile} NAME)
+    set_source_files_properties(${stylefile} PROPERTIES QT_RESOURCE_ALIAS ${stylename})
+endforeach()
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/resources/fonts/MaterialSymbolsRounded.ttf PROPERTIES
+    QT_RESOURCE_ALIAS "fonts/MaterialSymbolsRounded.ttf")
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/resources/fonts/MaterialSymbolsRounded-Fill.ttf PROPERTIES
+    QT_RESOURCE_ALIAS "fonts/MaterialSymbolsRounded-Fill.ttf")
 qt_add_resources(eclipse-ssh-desktop "md3style"
     PREFIX "/style/EclipseMD3"
     FILES ${ECLIPSE_MD3_STYLE_FILES})

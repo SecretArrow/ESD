@@ -16,8 +16,6 @@ Text {
 
     width: iconSize
     height: iconSize
-    implicitWidth: iconSize
-    implicitHeight: iconSize
 
     text: IconMap.code(root.icon)
     font.family: IconMap.family(root.filled)
