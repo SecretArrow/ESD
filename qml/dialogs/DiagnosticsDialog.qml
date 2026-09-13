@@ -36,24 +36,49 @@ Dialog {
     }
 
     contentItem: ColumnLayout {
-        spacing: 8
+        spacing: 12
+
         ComboBox {
             id: profileBox
             Layout.fillWidth: true
             model: App.profiles.allProfiles().map(p => p.name)
             onActivated: (i) => { dlg.profileId = App.profiles.allProfiles()[i].id; stepsModel.clear(); App.runDiagnostics(dlg.profileId, "") }
         }
+
         ListView {
             Layout.fillWidth: true
             Layout.preferredHeight: 260
+            clip: true
+            spacing: 2
             model: ListModel { id: stepsModel }
             delegate: RowLayout {
                 width: dlg.width - 60
-                Label { text: ok ? "✓" : "✗"; color: ok ? Theme.success : Theme.error; font.pixelSize: 14 }
-                Label { text: step; color: Theme.text; Layout.preferredWidth: 130; font.pixelSize: 12 }
-                Label { text: detail; color: Theme.textMuted; font.pixelSize: 11; font.family: "monospace";
-                    elide: Text.ElideRight; Layout.fillWidth: true }
-                Label { text: ms > 0 ? ms + " ms" : ""; color: Theme.textMuted; font.pixelSize: 10 }
+                spacing: 10
+                MaterialIcon {
+                    icon: ok ? "check_circle" : "cancel"
+                    iconSize: 16
+                    color: ok ? Theme.success : Theme.error
+                }
+                Label {
+                    text: step
+                    color: Theme.onSurface
+                    Layout.preferredWidth: 130
+                    font.pixelSize: Theme.typeBodySmall
+                    elide: Text.ElideRight
+                }
+                Label {
+                    text: detail
+                    color: Theme.onSurfaceVariant
+                    font.pixelSize: Theme.typeLabelMedium
+                    font.family: "monospace"
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+                Label {
+                    text: ms > 0 ? ms + " ms" : ""
+                    color: Theme.onSurfaceVariant
+                    font.pixelSize: Theme.typeLabelSmall
+                }
             }
         }
     }

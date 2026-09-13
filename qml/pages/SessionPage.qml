@@ -14,7 +14,7 @@ Rectangle {
     // know its tab index.
     signal closeRequested()
 
-    color: "#14171e"
+    color: Theme.background
 
     function openFiles() { subBar.currentIndex = 1 }
     function toggleSnippets() { snippetsDrawer.open() }
@@ -47,7 +47,7 @@ Rectangle {
                     anchors.bottom: parent.bottom
                     width: parent.width
                     height: 1
-                    color: Theme.border
+                    color: Theme.outlineVariant
                 }
             }
             Repeater {
@@ -60,22 +60,22 @@ Rectangle {
                     contentItem: Label {
                         text: tabBtn.text
                         font: tabBtn.font
-                        color: tabBtn.checked ? Theme.text : Theme.textMuted
+                        color: tabBtn.checked ? Theme.onSurface : Theme.onSurfaceVariant
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         Behavior on color { ColorAnimation { duration: 150 } }
                     }
                     background: Rectangle {
-                        color: tabBtn.hovered ? Theme.hover : "transparent"
+                        color: tabBtn.hovered ? Theme.alpha(Theme.onSurface, Theme.stateHover) : "transparent"
                         radius: Theme.radiusS
-                        Behavior on color { ColorAnimation { duration: 130 } }
+                        Behavior on color { ColorAnimation { duration: Theme.durFast } }
                         Rectangle {
                             anchors.bottom: parent.bottom
                             anchors.horizontalCenter: parent.horizontalCenter
-                            width: parent.width - 16
-                            height: 2
-                            radius: 1
-                            color: Theme.accent
+                            width: parent.width - 24
+                            height: 3
+                            radius: 1.5
+                            color: Theme.primary
                             opacity: tabBtn.checked ? 1 : 0
                             Behavior on opacity { NumberAnimation { duration: 150 } }
                         }
@@ -107,10 +107,10 @@ Rectangle {
             clip: true
             color: {
                 if (connBanner.failed)
-                    return Qt.rgba(Theme.error.r, Theme.error.g, Theme.error.b, 0.12);
+                    return Theme.alpha(Theme.error, 0.12);
                 if (connBanner.connecting || connBanner.disconnecting)
-                    return Qt.rgba(Theme.warning.r, Theme.warning.g, Theme.warning.b, 0.12);
-                return Theme.hover; // Disconnected / Idle
+                    return Theme.alpha(Theme.warning, 0.12);
+                return Theme.alpha(Theme.onSurface, Theme.stateHover); // Disconnected / Idle
             }
             Behavior on implicitHeight { NumberAnimation { duration: 180 } }
             Behavior on opacity { NumberAnimation { duration: 180 } }
@@ -140,8 +140,8 @@ Rectangle {
                             return qsTr("Disconnected from %1").arg(h);
                         return qsTr("Not connected to %1").arg(h);
                     }
-                    color: Theme.text
-                    font.pixelSize: 13
+                    color: Theme.onSurface
+                    font.pixelSize: Theme.typeBodyMedium
                     elide: Label.ElideRight
                 }
 
@@ -155,8 +155,8 @@ Rectangle {
                 FlatButton {
                     visible: connBanner.failed || connBanner.offline
                     text: qsTr("Retry")
-                    accent: true
-                    glyph: "↻"
+                    iconName: "refresh"
+                    variant: "filled"
                     ToolTip.text: qsTr("Try connecting again")
                     onClicked: {
                         if (!page.session)
@@ -193,46 +193,46 @@ Rectangle {
                     spacing: 6
                     Item { Layout.preferredWidth: 6 }
                     FlatButton {
-                        glyph: "▸"
+                        iconName: "chevron_right"
                         text: qsTr("Split")
                         ToolTip.text: qsTr("Split terminal right")
                         onClicked: terminalSplits.newRight()
                     }
                     FlatButton {
-                        glyph: "▾"
+                        iconName: "expand_more"
                         text: qsTr("Split")
                         ToolTip.text: qsTr("Split terminal down")
                         onClicked: terminalSplits.newDown()
                     }
-                    Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.border }
+                    Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.outlineVariant }
                     FlatButton {
-                        glyph: "⧉"
+                        iconName: "content_copy"
                         text: qsTr("Copy")
                         ToolTip.text: qsTr("Copy selection")
                         onClicked: terminalSplits.copyActive()
                     }
                     FlatButton {
-                        glyph: "⎘"
+                        iconName: "content_paste"
                         text: qsTr("Paste")
                         ToolTip.text: qsTr("Paste from clipboard")
                         onClicked: terminalSplits.pasteActive()
                     }
                     FlatButton {
-                        glyph: "⌫"
+                        iconName: "backspace"
                         text: qsTr("Clear")
                         ToolTip.text: qsTr("Clear terminal scrollback")
                         onClicked: terminalSplits.clearActive()
                     }
-                    Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.border }
+                    Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.outlineVariant }
                     FlatButton {
-                        glyph: "⌕"
+                        iconName: "search"
                         text: qsTr("Find")
                         ToolTip.text: qsTr("Find in terminal buffer")
                         onClicked: page.openFind()
                     }
-                    Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.border }
+                    Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.outlineVariant }
                     FlatButton {
-                        glyph: terminalSplits.recording ? "■" : "●"
+                        iconName: terminalSplits.recording ? "stop" : "radio_button_checked"
                         text: terminalSplits.recording ? qsTr("Stop recording") : qsTr("Record")
                         ToolTip.text: terminalSplits.recording ? qsTr("Stop recording this session")
                                                                : qsTr("Record terminal output")
@@ -241,8 +241,8 @@ Rectangle {
                     }
                     Item { Layout.fillWidth: true }
                     Label {
-                        color: Theme.textMuted
-                        font.pixelSize: 11
+                        color: Theme.onSurfaceVariant
+                        font.pixelSize: Theme.typeLabelMedium
                         text: session ? qsTr("%1@%2 · %3").arg(session.username).arg(session.host).arg(session.engineName) : ""
                     }
                     Item { Layout.preferredWidth: 8 }
@@ -298,7 +298,7 @@ Rectangle {
                             color: "#0d0f14"
                             radius: Theme.radiusS
                             border.width: 1
-                            border.color: termItem.activeFocus ? Theme.accent : Theme.border
+                            border.color: termItem.activeFocus ? Theme.primary : Theme.outlineVariant
                             Behavior on border.color { ColorAnimation { duration: 150 } }
                             property alias term: termItem
                             function setGeometry(x, y, w, h) { this.x = x; this.y = y; this.width = w; this.height = h }
@@ -363,21 +363,21 @@ Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.margins: 12
-        radius: 17
+        radius: height / 2
         height: 34
         width: bannerText.implicitWidth + 30
         visible: false
         z: 40
         property string message: ""
         property bool isError: false
-        color: Theme.surface
+        color: Theme.surfaceContainerHigh
         border.color: isError ? Theme.error : Theme.success
         Label {
             id: bannerText
             anchors.centerIn: parent
             text: cmdBanner.message
             color: cmdBanner.isError ? Theme.error : Theme.success
-            font.pixelSize: 12
+            font.pixelSize: Theme.typeBodySmall
         }
         Timer { id: bannerTimer; interval: 4000; onTriggered: cmdBanner.visible = false }
         function show(message, isError) {
@@ -391,8 +391,8 @@ Rectangle {
     Connections {
         target: terminalSplits.primaryTerm
         function onCommandFinished(exitCode) {
-            cmdBanner.show(exitCode === 0 ? qsTr("✔ command finished (exit 0)")
-                                          : qsTr("✘ command finished (exit %1)").arg(exitCode),
+            cmdBanner.show(exitCode === 0 ? qsTr("Command finished (exit 0)")
+                                          : qsTr("Command failed (exit %1)").arg(exitCode),
                            exitCode !== 0);
         }
     }
@@ -406,9 +406,9 @@ Rectangle {
         anchors.margins: 8
         width: sixelRow.implicitWidth + 58
         height: 96
-        radius: 8
-        color: Theme.surface
-        border.color: Theme.border
+        radius: Theme.radiusM
+        color: Theme.surfaceContainerHigh
+        border.color: Theme.outlineVariant
         z: 30
         clip: true
         visible: sixelRepeater.count > 0
@@ -425,9 +425,9 @@ Rectangle {
                 delegate: Rectangle {
                     width: 76
                     height: 76
-                    radius: 6
-                    color: Theme.surfaceAlt
-                    border.color: Theme.border
+                    radius: Theme.radiusS
+                    color: Theme.surfaceContainer
+                    border.color: Theme.outlineVariant
                     Image {
                         anchors.fill: parent
                         anchors.margins: 2
@@ -447,13 +447,12 @@ Rectangle {
                 }
             }
         }
-        Button {
+        IconToolButton {
             anchors.right: parent.right
             anchors.rightMargin: 6
             anchors.verticalCenter: parent.verticalCenter
-            flat: true
-            font.pixelSize: 12
-            text: qsTr("✕")
+            icon: "close"
+            toolTip: qsTr("Dismiss")
             onClicked: if (terminalSplits.primaryTerm)
                            terminalSplits.primaryTerm.clearSixelThumbnails()
         }
@@ -465,6 +464,7 @@ Rectangle {
         edge: Qt.RightEdge
         width: 340
         height: parent.height
+        background: Rectangle { color: Theme.surfaceContainerLow }
         SnippetsPanel {
             anchors.fill: parent
             session: page.session

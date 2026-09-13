@@ -33,22 +33,26 @@ Rectangle {
     }
 
     implicitWidth: 480
-    implicitHeight: 40
+    implicitHeight: 48
     width: Math.min(implicitWidth, parent ? parent.width - 16 : implicitWidth)
-    radius: 8
-    color: Theme.surface
-    border.color: Theme.border
+    radius: height / 2
+    color: Theme.surfaceContainerHigh
+    border.color: Theme.outlineVariant
     visible: false
     z: 60
 
     RowLayout {
         anchors.fill: parent
-        anchors.margins: 5
+        anchors.leftMargin: 12
+        anchors.rightMargin: 6
+        anchors.topMargin: 6
+        anchors.bottomMargin: 6
         spacing: 4
 
         TextField {
             id: findField
             Layout.fillWidth: true
+            Layout.fillHeight: true
             placeholderText: qsTr("Find in terminal…")
             font.pixelSize: 12
             selectByMouse: true
@@ -80,6 +84,8 @@ Rectangle {
             checkable: true
             font.pixelSize: 11
             font.bold: checked
+            opacity: checked ? 1.0 : 0.72
+            Behavior on opacity { NumberAnimation { duration: Theme.durFast } }
             ToolTip.text: qsTr("Match case")
             ToolTip.visible: hovered
             onToggled: {
@@ -95,34 +101,31 @@ Rectangle {
             text: findField.text.length === 0 ? ""
                   : (bar.matchCount > 0 ? (bar.currentMatch + 1) + "/" + bar.matchCount
                                         : qsTr("no hits"))
-            color: bar.matchCount > 0 ? Theme.textMuted : Theme.error
-            font.pixelSize: 11
+            color: bar.matchCount > 0 ? Theme.onSurfaceVariant : Theme.error
+            font.pixelSize: Theme.typeLabelMedium
             elide: Text.ElideRight
         }
 
-        ToolButton {
-            text: qsTr("↑")
-            font.pixelSize: 13
+        IconToolButton {
+            icon: "arrow_upward"
+            iconSize: 18
             enabled: bar.matchCount > 0
-            ToolTip.text: qsTr("Previous match (Shift+Enter)")
-            ToolTip.visible: hovered
+            toolTip: qsTr("Previous match (Shift+Enter)")
             onClicked: if (bar.term) bar.term.findPrevious()
         }
 
-        ToolButton {
-            text: qsTr("↓")
-            font.pixelSize: 13
+        IconToolButton {
+            icon: "arrow_downward"
+            iconSize: 18
             enabled: bar.matchCount > 0
-            ToolTip.text: qsTr("Next match (Enter)")
-            ToolTip.visible: hovered
+            toolTip: qsTr("Next match (Enter)")
             onClicked: if (bar.term) bar.term.findNext()
         }
 
-        ToolButton {
-            text: qsTr("✕")
-            font.pixelSize: 12
-            ToolTip.text: qsTr("Close (Esc)")
-            ToolTip.visible: hovered
+        IconToolButton {
+            icon: "close"
+            iconSize: 18
+            toolTip: qsTr("Close (Esc)")
             onClicked: bar.close()
         }
     }

@@ -44,14 +44,14 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 12
+        anchors.margins: 16
         spacing: 14
 
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
 
-            Label { text: session ? session.name : ""; font.pixelSize: 18; font.weight: Font.DemiBold; color: Theme.text }
+            Label { text: session ? session.name : ""; font.pixelSize: Theme.typeTitleLarge; font.weight: Font.DemiBold; color: Theme.onSurface }
             Item { Layout.fillWidth: true }
 
             // live connection state with the shared status dot
@@ -63,12 +63,12 @@ Rectangle {
             Label {
                 visible: session !== null
                 text: session ? session.state : ""
-                color: Theme.textMuted
-                font.pixelSize: 13
+                color: Theme.onSurfaceVariant
+                font.pixelSize: Theme.typeBodyMedium
             }
         }
 
-        Label { id: upText; text: "—"; color: Theme.text; font.pixelSize: 13 }
+        Label { id: upText; text: "—"; color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium }
 
         GridLayout {
             columns: 2
@@ -76,28 +76,44 @@ Rectangle {
             rowSpacing: 14
             ColumnLayout {
                 spacing: 4
-                Label { text: qsTr("Memory"); color: Theme.textMuted; font.pixelSize: 12; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase }
+                RowLayout {
+                    spacing: 6
+                    MaterialIcon { icon: "memory"; iconSize: 14; color: Theme.onSurfaceVariant }
+                    Label { text: qsTr("Memory"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelMedium; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase }
+                }
                 ProgressBar { id: memBar; from: 0; to: 1; value: 0; Layout.preferredWidth: 260 }
-                Label { id: memText; text: "—"; color: Theme.text; font.pixelSize: 13 }
+                Label { id: memText; text: "—"; color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium }
             }
             ColumnLayout {
                 spacing: 4
-                Label { text: qsTr("Disk (/)"); color: Theme.textMuted; font.pixelSize: 12; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase }
+                RowLayout {
+                    spacing: 6
+                    MaterialIcon { icon: "storage"; iconSize: 14; color: Theme.onSurfaceVariant }
+                    Label { text: qsTr("Disk (/)"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelMedium; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase }
+                }
                 ProgressBar { id: diskBar; from: 0; to: 1; value: 0; Layout.preferredWidth: 260 }
-                Label { id: diskText; text: "—"; color: Theme.text; font.pixelSize: 13 }
+                Label { id: diskText; text: "—"; color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium }
             }
             ColumnLayout {
                 spacing: 4
-                Label { text: qsTr("Load average"); color: Theme.textMuted; font.pixelSize: 12; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase }
-                Label { id: loadText; text: "—"; color: Theme.text; font.pixelSize: 13; font.family: "monospace" }
+                RowLayout {
+                    spacing: 6
+                    MaterialIcon { icon: "speed"; iconSize: 14; color: Theme.onSurfaceVariant }
+                    Label { text: qsTr("Load average"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelMedium; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase }
+                }
+                Label { id: loadText; text: "—"; color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium; font.family: "monospace" }
             }
             ColumnLayout {
                 spacing: 4
-                Label { text: qsTr("CPU cores"); color: Theme.textMuted; font.pixelSize: 12; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase }
-                Label { id: coresText; text: "—"; color: Theme.text; font.pixelSize: 13; font.family: "monospace" }
+                RowLayout {
+                    spacing: 6
+                    MaterialIcon { icon: "bolt"; iconSize: 14; color: Theme.onSurfaceVariant }
+                    Label { text: qsTr("CPU cores"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelMedium; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase }
+                }
+                Label { id: coresText; text: "—"; color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium; font.family: "monospace" }
             }
         }
         Label { text: qsTr("Collected via standard commands (/proc, df, uptime) - no agent required.")
-                color: Theme.textMuted; font.pixelSize: 10 }
+                color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelSmall }
     }
 }

@@ -14,8 +14,8 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 8
-        spacing: 8
+        anchors.margins: 16
+        spacing: 12
 
         RowLayout {
             Layout.fillWidth: true
@@ -29,8 +29,22 @@ Rectangle {
                 id: categoryBox
                 model: ["All", "Connection", "SSH", "SFTP", "Transfer", "Tunnel", "Authentication", "Application", "Error", "Debug"]
             }
-            Button { text: qsTr("Clear"); onClicked: Logs.clear() }
-            Button { text: qsTr("Copy"); onClicked: App.copyToClipboard(exportText()) }
+            FlatButton {
+                text: qsTr("Clear")
+                iconName: "delete"
+                variant: "text"
+                small: true
+                ToolTip.text: qsTr("Clear the log")
+                onClicked: Logs.clear()
+            }
+            FlatButton {
+                text: qsTr("Copy")
+                iconName: "content_copy"
+                variant: "tonal"
+                small: true
+                ToolTip.text: qsTr("Copy the log to the clipboard")
+                onClicked: App.copyToClipboard(exportText())
+            }
             Item { Layout.fillWidth: true }
             Switch {
                 text: qsTr("Debug mode")
@@ -49,16 +63,20 @@ Rectangle {
             delegate: Rectangle {
                 width: logList.width
                 height: Math.max(18, messageText.implicitHeight + 4)
-                color: level === 3 ? "#33202a" : (index % 2 ? "transparent" : Theme.surfaceAlt)
+                radius: Theme.radiusXS
+                color: level === 3 ? Theme.errorContainer
+                     : (index % 2 ? "transparent" : Theme.surfaceContainerLow)
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 2
+                    anchors.leftMargin: 6
+                    anchors.rightMargin: 6
                     spacing: 8
-                    Label { text: timeText; color: Theme.textMuted; font.pixelSize: 10; font.family: "monospace" }
+                    Label { text: timeText; color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelSmall; font.family: "monospace" }
                     Rectangle { width: 6; height: 6; radius: 3
-                        color: level === 3 ? Theme.error : level === 2 ? Theme.warning : Theme.accent }
-                    Label { text: categoryName; color: Theme.textMuted; font.pixelSize: 10; Layout.preferredWidth: 92 }
-                    Label { id: messageText; text: message; color: Theme.text; font.pixelSize: 11
+                        color: level === 3 ? Theme.error : level === 2 ? Theme.warning : Theme.primary }
+                    Label { text: categoryName; color: level === 3 ? Theme.onErrorContainer : Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelSmall; Layout.preferredWidth: 92 }
+                    Label { id: messageText; text: message; color: level === 3 ? Theme.onErrorContainer : Theme.onSurface
+                        font.pixelSize: Theme.typeLabelMedium
                         font.family: "monospace"; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
                 }
             }

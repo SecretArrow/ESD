@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QFile>
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLockFile>
@@ -109,11 +110,22 @@ int main(int argc, char* argv[])
 #ifdef _WIN32
     attachParentConsole();
 #endif
-    // Consistent desktop style + themable palette
-    qputenv("QT_QUICK_CONTROLS_STYLE", "Fusion");
+    // Consistent render loop; the Quick Controls style is the bundled
+    // Material Design 3 implementation (see qml/style/EclipseMD3).
     qputenv("QSG_RENDER_LOOP", "basic");
 
     QApplication app(argc, argv);
+
+    // Material Design 3: custom Quick Controls style resolved from the
+    // compiled-in resource tree, plus the Material Symbols Rounded icon
+    // fonts used by MaterialIcon.qml and the EclipseMD3 style components.
+    QQuickStyle::setStyle(QStringLiteral(":/style/EclipseMD3"));
+    for (const char* fontResource : { ":/fonts/MaterialSymbolsRounded.ttf",
+                                      ":/fonts/MaterialSymbolsRounded-Fill.ttf" }) {
+        if (QFontDatabase::addApplicationFont(QString::fromLatin1(fontResource)) < 0)
+            std::fprintf(stderr, "warning: failed to load icon font %s\n", fontResource);
+    }
+
     QApplication::setOrganizationName(QStringLiteral("EclipseSSH"));
     QApplication::setApplicationName(QStringLiteral("Eclipse SSH Desktop"));
     QApplication::setApplicationVersion(QStringLiteral(ECLIPSE_VERSION));

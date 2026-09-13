@@ -3,6 +3,9 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Eclipse.Internal 1.0
 
+// Module import: gives access to the Theme singleton and MD3 components.
+import Eclipse
+
 // Command Runner: run a command on multiple connected servers at once.
 Dialog {
     id: dlg
@@ -30,26 +33,38 @@ Dialog {
     }
 
     contentItem: ColumnLayout {
-        spacing: 8
+        spacing: 12
+
         RowLayout {
             Layout.fillWidth: true
+            spacing: 10
             ComboBox { id: snippetBox; Layout.preferredWidth: 200
                 model: SnippetModel { id: snippetModel }
                 textRole: "title"
                 onActivated: (i) => cmdField.text = snippetModel.get(i).command }
-            Button { flat: true; text: qsTr("Insert snippet"); onClicked: {
-                if (snippetBox.currentIndex >= 0)
-                    cmdField.text = snippetModel.get(snippetBox.currentIndex).command } }
+            FlatButton {
+                text: qsTr("Insert snippet")
+                iconName: "content_paste"
+                onClicked: {
+                    if (snippetBox.currentIndex >= 0)
+                        cmdField.text = snippetModel.get(snippetBox.currentIndex).command }
+            }
+            Item { Layout.fillWidth: true }
         }
+
         TextField {
             id: cmdField
             Layout.fillWidth: true
             placeholderText: qsTr("e.g. docker ps   |   df -h   |   systemctl status {service}")
             font.family: "monospace"
+            font.pixelSize: Theme.typeBodySmall
             onAccepted: run()
         }
+
         RowLayout {
-            Label { text: qsTr("Servers:"); color: Theme.textMuted; font.pixelSize: 11 }
+            Layout.fillWidth: true
+            spacing: 10
+            Label { text: qsTr("Servers:"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelMedium }
             Repeater {
                 model: ListModel { id: serversModel }
                 delegate: CheckBox { text: name; checked: checked0
@@ -57,28 +72,58 @@ Dialog {
                     onCheckedChanged: if (dlg.targets) dlg.targets[sid] = checked }
             }
             Item { Layout.fillWidth: true }
-            Button { text: dlg.busy ? qsTr("Running…") : qsTr("Run on selected"); highlighted: !dlg.busy
-                enabled: !dlg.busy; onClicked: dlg.run() }
+            FlatButton {
+                text: dlg.busy ? qsTr("Running…") : qsTr("Run on selected")
+                iconName: dlg.busy ? "sync" : "play_arrow"
+                accent: !dlg.busy
+                enabled: !dlg.busy
+                onClicked: dlg.run()
+            }
         }
+
         ListView {
             id: resultsList
             Layout.fillWidth: true
             Layout.preferredHeight: 260
             clip: true
+            spacing: 6
             model: ListModel { id: resultsModel }
             delegate: Rectangle {
                 width: resultsList.width
-                height: outText.implicitHeight + 24
-                color: Theme.surfaceAlt
-                radius: 6
+                height: outText.implicitHeight + 30
+                color: Theme.surfaceContainer
+                radius: Theme.radiusM
                 ColumnLayout {
-                    anchors.fill: parent; anchors.margins: 6
+                    anchors.fill: parent; anchors.margins: 10
+                    spacing: 4
                     RowLayout {
-                        Label { text: host; font.weight: Font.DemiBold; color: exitCode === 0 ? Theme.success : Theme.error }
-                        Label { text: qsTr("exit %1").arg(exitCode); color: Theme.textMuted; font.pixelSize: 10 }
+                        spacing: 6
+                        MaterialIcon {
+                            icon: "terminal"
+                            iconSize: 14
+                            color: exitCode === 0 ? Theme.success : Theme.error
+                        }
+                        Label {
+                            text: host
+                            font.weight: Font.Medium
+                            font.pixelSize: Theme.typeBodySmall
+                            color: exitCode === 0 ? Theme.success : Theme.error
+                        }
+                        Label {
+                            text: qsTr("exit %1").arg(exitCode)
+                            color: Theme.onSurfaceVariant
+                            font.pixelSize: Theme.typeLabelSmall
+                        }
                     }
-                    Label { id: outText; text: output; color: Theme.text; font.family: "monospace"; font.pixelSize: 11
-                        wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
+                    Label {
+                        id: outText
+                        text: output
+                        color: Theme.onSurface
+                        font.family: "monospace"
+                        font.pixelSize: Theme.typeLabelMedium
+                        wrapMode: Text.WrapAnywhere
+                        Layout.fillWidth: true
+                    }
                 }
             }
         }

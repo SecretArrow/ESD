@@ -90,10 +90,10 @@ Dialog {
     }
 
     contentItem: ColumnLayout {
-        spacing: 10
+        spacing: 14
 
         ColumnLayout {
-            spacing: 4
+            spacing: 6
             RadioButton { text: qsTr("PuTTY sessions"); checked: dlg.source === 0
                 onToggled: if (checked) dlg.source = 0 }
             RadioButton { text: qsTr("OpenSSH known_hosts (host keys)"); checked: dlg.source === 1
@@ -105,8 +105,8 @@ Dialog {
         Label {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
-            font.pixelSize: 11
-            color: Theme.textMuted
+            font.pixelSize: Theme.typeBodySmall
+            color: Theme.onSurfaceVariant
             visible: dlg.source === 0
             text: qsTr("Reads saved sessions from the Windows registry (HKCU\\Software\\SimonTatham\\PuTTY\\Sessions). Only SSH sessions are imported; telnet/serial sessions are counted as skipped. On other platforms export a .reg file on Windows first and hand it to the PuTTY .reg import.")
         }
@@ -114,34 +114,61 @@ Dialog {
         RowLayout {
             visible: dlg.source !== 0
             Layout.fillWidth: true
-            Label { text: dlg.isBundle ? qsTr("File") : qsTr("known_hosts"); color: Theme.text }
-            TextField { id: pathField
+            spacing: 10
+            RowLayout {
+                spacing: 6
+                MaterialIcon {
+                    icon: dlg.isBundle ? "description" : "key"
+                    iconSize: 18
+                    color: Theme.onSurfaceVariant
+                }
+                Label { text: dlg.isBundle ? qsTr("File") : qsTr("known_hosts"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium }
+            }
+            TextField {
+                id: pathField
                 Layout.fillWidth: true
                 placeholderText: dlg.isBundle ? qsTr("bundle.json / bundle.epb")
-                                              : qsTr("/path/to/known_hosts") }
-            Button { text: "…"; flat: true; onClicked: openFileDlg.open() }
+                                              : qsTr("/path/to/known_hosts")
+            }
+            IconToolButton {
+                icon: "folder_open"
+                iconSize: 18
+                toolTip: qsTr("Browse…")
+                onClicked: openFileDlg.open()
+            }
         }
 
         RowLayout {
             visible: dlg.isBundle
             Layout.fillWidth: true
-            Label { text: qsTr("Passphrase"); color: Theme.text }
-            TextField { id: passField
+            spacing: 10
+            RowLayout {
+                spacing: 6
+                MaterialIcon { icon: "password"; iconSize: 18; color: Theme.onSurfaceVariant }
+                Label { text: qsTr("Passphrase"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium }
+            }
+            TextField {
+                id: passField
                 Layout.fillWidth: true
                 echoMode: TextInput.Password
-                placeholderText: qsTr("empty = write / read plaintext bundle") }
+                placeholderText: qsTr("empty = write / read plaintext bundle")
+            }
         }
 
         RowLayout {
             Layout.fillWidth: true
+            spacing: 10
             Item { Layout.fillWidth: true }
-            Button {
+            FlatButton {
                 visible: dlg.isBundle
                 text: qsTr("Export bundle…")
+                iconName: "file_upload"
+                variant: "outlined"
                 onClicked: saveFileDlg.open()
             }
-            Button {
-                highlighted: true
+            FlatButton {
+                accent: true
+                iconName: "file_download"
                 text: dlg.source === 0 ? qsTr("Import PuTTY sessions")
                     : dlg.source === 1 ? qsTr("Import host keys…")
                     : qsTr("Import bundle…")
@@ -153,25 +180,42 @@ Dialog {
             }
         }
 
-        // Results area (counts / errors after a run)
+        // Results area (counts / errors after a run) — MD3 tonal status container
         Rectangle {
             Layout.fillWidth: true
             visible: dlg.resultText.length > 0
-            radius: 6
-            color: Theme.surfaceAlt
-            border.color: dlg.resultIsError ? Theme.error : Theme.success
-            implicitHeight: resultsCol.implicitHeight + 20
+            radius: Theme.radiusM
+            color: dlg.resultIsError ? Theme.errorContainer : Theme.successContainer
+            implicitHeight: resultsCol.implicitHeight + 24
             ColumnLayout {
                 id: resultsCol
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 10
-                spacing: 2
-                Label { visible: dlg.resultTitle.length > 0; text: dlg.resultTitle
-                    font.weight: Font.DemiBold; color: Theme.text }
-                Label { text: dlg.resultText; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true
-                    color: dlg.resultIsError ? Theme.error : Theme.text; font.pixelSize: 12 }
+                anchors.margins: 12
+                spacing: 4
+                RowLayout {
+                    spacing: 6
+                    visible: dlg.resultTitle.length > 0
+                    MaterialIcon {
+                        icon: dlg.resultIsError ? "error" : "check_circle"
+                        iconSize: 16
+                        color: dlg.resultIsError ? Theme.onErrorContainer : Theme.onSuccessContainer
+                    }
+                    Label {
+                        text: dlg.resultTitle
+                        font.weight: Font.Medium
+                        font.pixelSize: Theme.typeTitleSmall
+                        color: dlg.resultIsError ? Theme.onErrorContainer : Theme.onSuccessContainer
+                    }
+                }
+                Label {
+                    text: dlg.resultText
+                    wrapMode: Text.WrapAnywhere
+                    Layout.fillWidth: true
+                    color: dlg.resultIsError ? Theme.onErrorContainer : Theme.onSuccessContainer
+                    font.pixelSize: Theme.typeBodySmall
+                }
             }
         }
     }

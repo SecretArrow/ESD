@@ -61,7 +61,7 @@ Rectangle {
 
     ScrollView {
         anchors.fill: parent
-        anchors.margins: 26
+        anchors.margins: 24
         ColumnLayout {
             width: Math.min(900, page.width - 60)
             spacing: 18
@@ -72,18 +72,18 @@ Rectangle {
                 spacing: 6
                 Label {
                     text: qsTr("Welcome to Eclipse SSH Desktop")
-                    font.pixelSize: 28; font.weight: Font.DemiBold; color: Theme.text
+                    font.pixelSize: Theme.typeHeadlineMedium; font.weight: Font.DemiBold; color: Theme.onSurface
                 }
                 Rectangle {
                     Layout.preferredWidth: 48
-                    Layout.preferredHeight: 3
-                    width: 48; height: 3
-                    radius: 1.5
-                    color: Theme.accent
+                    Layout.preferredHeight: 4
+                    width: 48; height: 4
+                    radius: 2
+                    color: Theme.primary
                 }
                 Label {
                     text: qsTr("SSH + SFTP + Terminal + Tunnels in one fast, native app.\nSimple by default, powerful when needed.")
-                    color: Theme.textMuted; font.pixelSize: 13
+                    color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodyMedium
                 }
             }
 
@@ -92,21 +92,21 @@ Rectangle {
                 spacing: 12
                 FlatButton {
                     text: qsTr("New Connection")
-                    glyph: "＋"
-                    accent: true
+                    iconName: "add"
+                    variant: "filled"
                     ToolTip.text: qsTr("Create a saved connection profile")
                     onClicked: page.newProfile()
                 }
                 FlatButton {
                     text: qsTr("Quick Connect")
-                    glyph: "»"
-                    showBorder: true
+                    iconName: "double_arrow"
+                    variant: "outlined"
                     ToolTip.text: qsTr("Connect without saving a profile")
                     onClicked: page.quickConnect()
                 }
                 FlatButton {
                     text: qsTr("Import OpenSSH config")
-                    showBorder: true
+                    variant: "text"
                     ToolTip.text: qsTr("Import hosts from ~/.ssh/config")
                     onClicked: App.triggerCommand("app.import-openssh")
                 }
@@ -120,18 +120,22 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 68
                     radius: Theme.radiusM
-                    color: Theme.surfaceAlt
+                    color: Theme.surfaceContainerLow
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 14
                         spacing: 2
-                        Label {
-                            text: qsTr("PROFILES")
-                            color: Theme.textMuted; font.pixelSize: 11; font.letterSpacing: 0.8
+                        RowLayout {
+                            spacing: 6
+                            MaterialIcon { icon: "person"; iconSize: 14; color: Theme.onSurfaceVariant }
+                            Label {
+                                text: qsTr("PROFILES")
+                                color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelSmall; font.letterSpacing: 0.8
+                            }
                         }
                         Label {
                             text: page.profileCount
-                            color: Theme.text; font.pixelSize: 18; font.weight: Font.DemiBold
+                            color: Theme.onSurface; font.pixelSize: Theme.typeTitleLarge; font.weight: Font.DemiBold
                         }
                     }
                 }
@@ -139,18 +143,22 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 68
                     radius: Theme.radiusM
-                    color: Theme.surfaceAlt
+                    color: Theme.surfaceContainerLow
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 14
                         spacing: 2
-                        Label {
-                            text: qsTr("ACTIVE SESSIONS")
-                            color: Theme.textMuted; font.pixelSize: 11; font.letterSpacing: 0.8
+                        RowLayout {
+                            spacing: 6
+                            MaterialIcon { icon: "monitor_heart"; iconSize: 14; color: Theme.onSurfaceVariant }
+                            Label {
+                                text: qsTr("ACTIVE SESSIONS")
+                                color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelSmall; font.letterSpacing: 0.8
+                            }
                         }
                         Label {
                             text: activeSessionsRepeater.count
-                            color: Theme.text; font.pixelSize: 18; font.weight: Font.DemiBold
+                            color: Theme.onSurface; font.pixelSize: Theme.typeTitleLarge; font.weight: Font.DemiBold
                         }
                     }
                 }
@@ -158,18 +166,22 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 68
                     radius: Theme.radiusM
-                    color: Theme.surfaceAlt
+                    color: Theme.surfaceContainerLow
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 14
                         spacing: 2
-                        Label {
-                            text: qsTr("VERSION")
-                            color: Theme.textMuted; font.pixelSize: 11; font.letterSpacing: 0.8
+                        RowLayout {
+                            spacing: 6
+                            MaterialIcon { icon: "info"; iconSize: 14; color: Theme.onSurfaceVariant }
+                            Label {
+                                text: qsTr("VERSION")
+                                color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelSmall; font.letterSpacing: 0.8
+                            }
                         }
                         Label {
                             text: App.version
-                            color: Theme.text; font.pixelSize: 18; font.weight: Font.DemiBold
+                            color: Theme.onSurface; font.pixelSize: Theme.typeTitleLarge; font.weight: Font.DemiBold
                         }
                     }
                 }
@@ -178,7 +190,7 @@ Rectangle {
             // ---- favorites & recent -----------------------------------
             Label {
                 text: qsTr("Favorites & recent")
-                font.pixelSize: 15; color: Theme.text
+                font.pixelSize: Theme.typeTitleMedium; font.weight: Font.Medium; color: Theme.onSurface
                 topPadding: 12
                 visible: page.profileCount > 0
             }
@@ -194,9 +206,9 @@ Rectangle {
                         id: card
                         width: 240; height: 64
                         radius: Theme.radiusM
-                        color: Theme.surface
+                        color: Theme.surfaceContainerLow
                         border.width: 1
-                        border.color: cardMouse.containsMouse ? Theme.accent : Theme.border
+                        border.color: cardMouse.containsMouse ? Theme.primary : Theme.outlineVariant
                         scale: cardMouse.containsMouse ? 1.02 : 1.0
 
                         Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
@@ -224,22 +236,23 @@ Rectangle {
                                 spacing: 2
                                 Label {
                                     text: model.name
-                                    color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold
+                                    color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium; font.weight: Font.DemiBold
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
                                 }
                                 Label {
                                     text: model.userHost
-                                    color: Theme.textMuted; font.pixelSize: 11
+                                    color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelMedium
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
                                 }
                             }
-                            Label {
-                                text: "★"
+                            MaterialIcon {
+                                icon: "star"
+                                filled: true
+                                iconSize: 16
                                 visible: model.favorite
-                                color: "#e2b12c"
-                                font.pixelSize: 14
+                                color: Theme.warning
                                 Layout.alignment: Qt.AlignVCenter
                             }
                         }
@@ -265,32 +278,33 @@ Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 180
                 radius: Theme.radiusM
-                color: Theme.surface
+                color: Theme.surfaceContainerLow
                 border.width: 1
-                border.color: Theme.border
+                border.color: Theme.outlineVariant
                 visible: page.profileCount === 0
                 ColumnLayout {
                     anchors.centerIn: parent
                     spacing: 10
-                    Label {
-                        text: "⌁"
-                        font.pixelSize: 40
-                        color: Theme.accent
+                    MaterialIcon {
+                        icon: "cable"
+                        iconSize: 40
+                        color: Theme.primary
                         Layout.alignment: Qt.AlignHCenter
                     }
                     Label {
                         text: qsTr("No connections yet")
-                        color: Theme.text; font.pixelSize: 15; font.weight: Font.DemiBold
+                        color: Theme.onSurface; font.pixelSize: Theme.typeTitleMedium; font.weight: Font.DemiBold
                         Layout.alignment: Qt.AlignHCenter
                     }
                     Label {
                         text: qsTr("Create your first connection to get started.")
-                        color: Theme.textMuted; font.pixelSize: 12
+                        color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall
                         Layout.alignment: Qt.AlignHCenter
                     }
                     FlatButton {
-                        text: qsTr("＋ New Connection")
-                        accent: true
+                        text: qsTr("New Connection")
+                        iconName: "add"
+                        variant: "filled"
                         Layout.alignment: Qt.AlignHCenter
                         Layout.topMargin: 4
                         onClicked: page.newProfile()
@@ -299,11 +313,11 @@ Rectangle {
             }
 
             // ---- active sessions --------------------------------------
-            Label { text: qsTr("Active sessions"); font.pixelSize: 15; color: Theme.text }
+            Label { text: qsTr("Active sessions"); font.pixelSize: Theme.typeTitleMedium; font.weight: Font.Medium; color: Theme.onSurface }
             Label {
                 visible: activeSessionsRepeater.count === 0
                 text: qsTr("No active sessions. Connect to a server to get started.")
-                color: Theme.textMuted; font.pixelSize: 12
+                color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall
             }
             Flow {
                 Layout.fillWidth: true
@@ -315,9 +329,9 @@ Rectangle {
                         id: sessionCard
                         width: 240; height: 64
                         radius: Theme.radiusM
-                        color: Theme.surface
+                        color: Theme.surfaceContainerLow
                         border.width: 1
-                        border.color: sessionMouse.containsMouse ? Theme.accent : Theme.border
+                        border.color: sessionMouse.containsMouse ? Theme.primary : Theme.outlineVariant
                         scale: sessionMouse.containsMouse ? 1.02 : 1.0
 
                         Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
@@ -345,7 +359,7 @@ Rectangle {
                                 spacing: 2
                                 Label {
                                     text: model.name
-                                    color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold
+                                    color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium; font.weight: Font.DemiBold
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
                                 }
@@ -353,7 +367,7 @@ Rectangle {
                                     text: model.latencyMs >= 0
                                           ? qsTr("%1 ms · %2").arg(model.latencyMs).arg(model.state)
                                           : model.state
-                                    color: Theme.textMuted; font.pixelSize: 11
+                                    color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelMedium
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
                                 }
@@ -365,7 +379,7 @@ Rectangle {
 
             Label {
                 text: qsTr("Keyboard: Ctrl+Shift+P command palette · Ctrl+N new connection · Ctrl+T terminal")
-                color: Theme.textMuted; font.pixelSize: 11; topPadding: 20
+                color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelMedium; topPadding: 20
             }
         }
     }

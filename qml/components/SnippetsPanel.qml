@@ -1,23 +1,32 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Eclipse
 import Eclipse.Internal 1.0
 
 Rectangle {
     id: panel
     property var session: null
-    color: Theme.surface
+    color: Theme.surfaceContainerLow
 
     SnippetModel { id: snippetModel }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 10
+        anchors.margins: 12
         spacing: 8
 
         RowLayout {
-            Label { text: qsTr("Snippets"); font.weight: Font.DemiBold; color: Theme.text; Layout.fillWidth: true }
-            Button { flat: true; text: "+"; onClicked: snippetModel.addSnippet(groupField.text || "General", titleField.text, cmdField.text) }
+            Label {
+                text: qsTr("Snippets")
+                font.pixelSize: Theme.typeTitleMedium; font.weight: Font.Medium; color: Theme.onSurface
+                Layout.fillWidth: true
+            }
+            IconToolButton {
+                icon: "add"
+                toolTip: qsTr("Add snippet")
+                onClicked: snippetModel.addSnippet(groupField.text || "General", titleField.text, cmdField.text)
+            }
         }
         RowLayout {
             TextField { id: groupField; placeholderText: qsTr("Group"); Layout.preferredWidth: 80 }
@@ -32,17 +41,20 @@ Rectangle {
             clip: true
             spacing: 2
             section.property: "group"
-            section.delegate: Label { text: section; color: Theme.accent; font.pixelSize: 11;
-                font.weight: Font.DemiBold; topPadding: 6 }
+            section.delegate: Label { text: section; color: Theme.primary; font.pixelSize: Theme.typeLabelMedium;
+                font.weight: Font.DemiBold; font.letterSpacing: 0.8; font.capitalization: Font.AllUppercase; topPadding: 6 }
             delegate: RowLayout {
                 width: ListView.view.width
-                Label { text: title; color: Theme.text; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
-                Button { flat: true; text: "▶"; ToolTip.text: qsTr("Send to terminal"); ToolTip.visible: hovered
+                Label { text: title; color: Theme.onSurface; font.pixelSize: Theme.typeBodySmall; Layout.fillWidth: true; elide: Text.ElideRight }
+                IconToolButton {
+                    id: sendButton
+                    icon: "play_arrow"
+                    toolTip: qsTr("Send to terminal")
                     onClicked: {
                         if (!panel.session) return;
                         const vars = {};
                         const names = snippetModel.variablesIn(command);
-                        pendingSend = { command: command, names: names };
+                        sendButton.pendingSend = { command: command, names: names };
                         if (names.length === 0) {
                             panel.session.sendToTerminal(snippetModel.expandCommand(command, {}) + "\n");
                         } else {
@@ -52,8 +64,8 @@ Rectangle {
                     }
                     property var pendingSend: null
                 }
-                Button { flat: true; text: "✎"; onClicked: snippetModel.updateSnippet(id, group, title, cmdField.text) }
-                Button { flat: true; text: "✕"; onClicked: snippetModel.removeSnippet(id) }
+                IconToolButton { icon: "edit"; toolTip: qsTr("Save command"); onClicked: snippetModel.updateSnippet(id, group, title, cmdField.text) }
+                IconToolButton { icon: "delete"; danger: true; toolTip: qsTr("Delete snippet"); onClicked: snippetModel.removeSnippet(id) }
             }
         }
     }
@@ -71,7 +83,7 @@ Rectangle {
             Repeater {
                 model: varsDialog.model
                 ColumnLayout {
-                    Label { text: "{" + modelData + "}"; color: Theme.accent; font.family: "monospace" }
+                    Label { text: "{" + modelData + "}"; color: Theme.primary; font.family: "monospace" }
                     TextField { Layout.fillWidth: true }
                 }
             }

@@ -29,6 +29,7 @@ Rectangle {
                 id: catList
                 Layout.preferredWidth: 180
                 Layout.fillHeight: true
+                spacing: 4
                 model: ListModel {
                     ListElement { name: "Appearance" }
                     ListElement { name: "Terminal" }
@@ -57,7 +58,7 @@ Rectangle {
                     ColumnLayout {
                         width: 520
                         spacing: 10
-                        Label { text: qsTr("Theme"); font.weight: Font.DemiBold; color: Theme.text }
+                        Label { text: qsTr("Theme"); font.pixelSize: Theme.typeTitleMedium; font.weight: Font.Medium; color: Theme.onSurface }
                         ComboBox {
                             id: themeBox
                             model: ["system", "light", "dark"]
@@ -65,21 +66,21 @@ Rectangle {
                                           : ["system","light","dark"].indexOf(App.settings.themeMode)
                             onActivated: (i) => { App.settings.themeMode = model[i]; applyTheme() }
                         }
-                        Label { text: qsTr("Accent color"); color: Theme.text }
+                        Label { text: qsTr("Accent color"); color: Theme.onSurface }
                         RowLayout {
                             Repeater {
                                 model: ["#5B8DEF", "#3fb66f", "#e2b12c", "#e25d5d", "#b46bd6", "#4fc2c5"]
                                 Rectangle {
-                                    width: 30; height: 30; radius: 15; color: modelData
+                                    width: 30; height: 30; radius: width / 2; color: modelData
                                     // QColor has no toUpperCase(); go through toString()
                                     border.width: ThemeBridge.accent.toString().toUpperCase() === modelData.toUpperCase() ? 3 : 1
-                                    border.color: Theme.text
-                                    MouseArea { anchors.fill: parent; onClicked: {
+                                    border.color: ThemeBridge.accent.toString().toUpperCase() === modelData.toUpperCase() ? Theme.onSurface : Theme.outlineVariant
+                                    MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: {
                                         App.settings.accentColor = modelData; applyTheme() } }
                                 }
                             }
                         }
-                        Label { text: qsTr("Density"); color: Theme.text }
+                        Label { text: qsTr("Density"); color: Theme.onSurface }
                         ComboBox {
                             model: ["Compact", "Comfortable", "High density"]
                             onActivated: (i) => App.settings.uiDensity = [0.85, 1.0, 1.15][i]
@@ -87,7 +88,7 @@ Rectangle {
                                 [0.85, 1.0, 1.15].indexOf(App.settings.uiDensity) < 0 ? 1
                                 : [0.85, 1.0, 1.15].indexOf(App.settings.uiDensity)
                         }
-                        Label { text: qsTr("UI font size"); color: Theme.text }
+                        Label { text: qsTr("UI font size"); color: Theme.onSurface }
                         SpinBox { from: 8; to: 20; value: App.settings.uiFontSize
                             onValueModified: App.settings.uiFontSize = value }
                     }
@@ -97,7 +98,7 @@ Rectangle {
                 ScrollView {
                     ColumnLayout {
                         width: 520; spacing: 10
-                        Label { text: qsTr("Terminal font"); font.weight: Font.DemiBold; color: Theme.text }
+                        Label { text: qsTr("Terminal font"); font.pixelSize: Theme.typeTitleMedium; font.weight: Font.Medium; color: Theme.onSurface }
                         ComboBox {
                             editable: true
                             model: ["monospace", "DejaVu Sans Mono", "Liberation Mono", "Cascadia Mono", "JetBrains Mono"]
@@ -105,14 +106,14 @@ Rectangle {
                             Component.onCompleted: currentIndex =
                                 model.indexOf(App.settings.terminalFontFamily) >= 0 ? model.indexOf(App.settings.terminalFontFamily) : 0
                         }
-                        Label { text: qsTr("Font size"); color: Theme.text }
+                        Label { text: qsTr("Font size"); color: Theme.onSurface }
                         SpinBox { from: 8; to: 32; value: App.settings.terminalFontSize
                             onValueModified: App.settings.terminalFontSize = value }
-                        Label { text: qsTr("Scrollback lines"); color: Theme.text }
+                        Label { text: qsTr("Scrollback lines"); color: Theme.onSurface }
                         SpinBox { from: 1000; to: 100000; stepSize: 1000
                             value: App.settings.terminalScrollback
                             onValueModified: App.settings.terminalScrollback = value }
-                        Label { text: qsTr("Cursor"); color: Theme.text }
+                        Label { text: qsTr("Cursor"); color: Theme.onSurface }
                         ComboBox {
                             model: ["block", "beam", "underline"]
                             onActivated: (i) => App.settings.terminalCursorStyle = model[i]
@@ -131,20 +132,20 @@ Rectangle {
                         width: 520; spacing: 10
                         Switch { text: qsTr("Auto reconnect"); checked: App.settings.autoReconnect
                             onToggled: App.settings.autoReconnect = checked }
-                        Label { text: qsTr("Reconnect retries"); color: Theme.text }
+                        Label { text: qsTr("Reconnect retries"); color: Theme.onSurface }
                         SpinBox { from: 1; to: 20; value: App.settings.reconnectRetries
                             onValueModified: App.settings.reconnectRetries = value }
-                        Label { text: qsTr("Keepalive (seconds, 0 = off)"); color: Theme.text }
+                        Label { text: qsTr("Keepalive (seconds, 0 = off)"); color: Theme.onSurface }
                         SpinBox { from: 0; to: 300; value: 15 }
-                        Label { text: qsTr("Default SSH engine"); color: Theme.text }
+                        Label { text: qsTr("Default SSH engine"); color: Theme.onSurface }
                         ComboBox {
                             model: ["auto (libssh)", "libssh", "libssh2"]
                             onActivated: (i) => App.settings.defaultEngine = ["auto","libssh","libssh2"][i]
                         }
-                        Label { text: qsTr("Profile sync folder (portable mode)"); color: Theme.text
+                        Label { text: qsTr("Profile sync folder (portable mode)"); color: Theme.onSurface
                             Layout.topMargin: 10 }
                         Label { text: qsTr("When set, connection profiles are stored in this folder so they can sync across devices (Dropbox/Nextcloud/network drive). Leave empty to use the default application storage.")
-                            color: Theme.textMuted; font.pixelSize: 11; wrapMode: Text.Wrap; Layout.maximumWidth: 480 }
+                            color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall; wrapMode: Text.Wrap; Layout.maximumWidth: 480 }
                         RowLayout {
                             Layout.fillWidth: true
                             TextField {
@@ -154,7 +155,7 @@ Rectangle {
                                 placeholderText: qsTr("e.g. /home/user/Sync/esd-profiles")
                                 onEditingFinished: App.settings.profilesSyncFolder = text
                             }
-                            Button { text: qsTr("Clear"); flat: true
+                            FlatButton { text: qsTr("Clear"); variant: "text"; small: true
                                 onClicked: { syncFolderField.text = ""; App.settings.profilesSyncFolder = "" } }
                         }
                     }
@@ -164,7 +165,7 @@ Rectangle {
                 ScrollView {
                     ColumnLayout {
                         width: 520; spacing: 10
-                        Label { text: qsTr("Max parallel transfers"); color: Theme.text }
+                        Label { text: qsTr("Max parallel transfers"); color: Theme.onSurface }
                         SpinBox { from: 1; to: 8; value: App.settings.maxParallelTransfers
                             onValueModified: App.settings.maxParallelTransfers = value }
                     }
@@ -174,9 +175,9 @@ Rectangle {
                 ScrollView {
                     ColumnLayout {
                         width: 560; spacing: 10
-                        Label { text: qsTr("Credential storage"); font.weight: Font.DemiBold; color: Theme.text }
+                        Label { text: qsTr("Credential storage"); font.pixelSize: Theme.typeTitleMedium; font.weight: Font.Medium; color: Theme.onSurface }
                         Label { text: qsTr("Current: %1").arg(App.credentials.storageDescription())
-                            color: Theme.textMuted; font.pixelSize: 11; wrapMode: Text.Wrap; Layout.maximumWidth: 480 }
+                            color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall; wrapMode: Text.Wrap; Layout.maximumWidth: 480 }
                         ComboBox {
                             id: credBox
                             model: ["os (secure storage)", "session (memory only)", "ask every time"]
@@ -184,11 +185,11 @@ Rectangle {
                                 (i === 1 ? 1 : i === 2 ? 2 : 0)
                         }
                         Label { text: qsTr("Passwords and passphrases are never stored in plaintext.\nHost key verification cannot be disabled.")
-                            color: Theme.textMuted; font.pixelSize: 11 }
-                        Label { text: qsTr("Post-quantum readiness"); font.weight: Font.DemiBold; color: Theme.text
+                            color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall }
+                        Label { text: qsTr("Post-quantum readiness"); font.pixelSize: Theme.typeTitleMedium; font.weight: Font.Medium; color: Theme.onSurface
                             Layout.topMargin: 14 }
                         Label { text: qsTr("OpenSSH 10.0 (April 2025) uses the hybrid post-quantum key exchange mlkem768x25519 by default. Eclipse SSH negotiates with the same algorithm list, but the bundled libssh/libssh2 engines do not yet implement post-quantum KEX — connections fall back to classical curves (curve25519 / ECDH). Run Diagnostics on a session to see the negotiated key exchange; a warning is shown when the connection is not post-quantum-ready. You can also set a KEX preference per profile (Advanced).")
-                            color: Theme.textMuted; font.pixelSize: 11; wrapMode: Text.Wrap; Layout.maximumWidth: 500 }
+                            color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall; wrapMode: Text.Wrap; Layout.maximumWidth: 500 }
                     }
                 }
 
@@ -214,14 +215,14 @@ Rectangle {
                             delegate: RowLayout {
                                 required property var modelData
                                 Layout.fillWidth: true
-                                Label { text: modelData.title; color: Theme.text; Layout.preferredWidth: 240 }
-                                Label { text: modelData.category; color: Theme.textMuted; Layout.preferredWidth: 100 }
+                                Label { text: modelData.title; color: Theme.onSurface; Layout.preferredWidth: 240 }
+                                Label { text: modelData.category; color: Theme.onSurfaceVariant; Layout.preferredWidth: 100 }
                                 Label { text: { const s = Shortcuts.sequenceFor(modelData.id); return s !== "" ? s : "—"; }
-                                    color: Theme.accent; font.family: "monospace" }
+                                    color: Theme.primary; font.family: "monospace" }
                             }
                         }
                         Label { text: qsTr("Shortcut editing: coming in a point release — overrides file: settings.ini [shortcuts]")
-                            color: Theme.textMuted; font.pixelSize: 11 }
+                            color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall }
                     }
                 }
 
@@ -237,12 +238,12 @@ Rectangle {
                             Component.onCompleted: currentIndex =
                                 model.indexOf(App.settings.updateChannel) < 0 ? 0 : model.indexOf(App.settings.updateChannel)
                         }
-                        Label { text: qsTr("Update channel"); color: Theme.text }
+                        Label { text: qsTr("Update channel"); color: Theme.onSurface }
                         Repeater {
                             model: Object.keys(App.developerInfo())
                             delegate: Label {
                                 text: modelData + ": " + App.developerInfo()[modelData]
-                                color: Theme.textMuted; font.pixelSize: 11; font.family: "monospace"
+                                color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall; font.family: "monospace"
                                 Layout.fillWidth: true; wrapMode: Text.WrapAnywhere
                             }
                         }

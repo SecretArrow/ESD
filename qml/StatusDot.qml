@@ -1,7 +1,7 @@
 import QtQuick
 import Eclipse
 
-// Small colored status dot for a session state string
+// Small MD3 status dot for a session state string
 // (SessionState names from SshWorker::sessionStateName).
 // Pulsing while busy (Connecting/Authenticating/...), red on failure.
 Rectangle {
@@ -17,15 +17,20 @@ Rectangle {
     readonly property bool bad: sessionState === "Error" || sessionState === "AuthFailed"
                                 || sessionState === "HostKeyRejected"
 
-    width: 9
-    height: 9
+    readonly property color dotColor: sessionState === "Connected" ? Theme.success
+                                    : busy ? Theme.warning
+                                    : bad ? Theme.error
+                                    : Theme.outline
+
+    width: 10
+    height: 10
     radius: width / 2
-    color: sessionState === "Connected" ? Theme.success
-         : busy ? Theme.warning
-         : bad ? Theme.error
-         : Theme.textMuted
+    color: dotColor
+    border.width: 1
+    border.color: Theme.alpha(dotColor, 0.35)
 
     Behavior on color { ColorAnimation { duration: 220 } }
+    Behavior on border.color { ColorAnimation { duration: 220 } }
 
     SequentialAnimation on opacity {
         running: dot.busy && dot.visible

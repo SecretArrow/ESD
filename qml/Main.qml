@@ -15,7 +15,7 @@ ApplicationWindow {
     font.pixelSize: 13
     title: currentSession ? qsTr("%1 — Eclipse SSH Desktop").arg(currentSession.name)
                           : qsTr("Eclipse SSH Desktop")
-    color: Theme.surface
+    color: Theme.background
     onClosing: (close) => {
         if (App.settings.minimizeToTray) {
             close.accepted = false;
@@ -220,27 +220,32 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 0
 
-        // ======== sidebar =========
+        // ======== sidebar (MD3 navigation surface) ========
         Rectangle {
             Layout.preferredWidth: 260
             Layout.fillHeight: true
-            color: Theme.surfaceAlt
+            color: Theme.surfaceContainerLow
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 10
-                spacing: 8
+                anchors.margins: 12
+                spacing: 10
 
                 RowLayout {
-                    spacing: 8
-                    Rectangle { width: 24; height: 24; radius: 7; color: Theme.accent }
-                    Label { text: "Eclipse SSH"; font.weight: Font.DemiBold; font.pixelSize: 15; color: Theme.text }
+                    spacing: 10
+                    Rectangle {
+                        width: 34; height: 34; radius: 10
+                        color: Theme.primaryContainer
+                        MaterialIcon {
+                            anchors.centerIn: parent
+                            icon: "nightlight"; iconSize: 20
+                            color: Theme.onPrimaryContainer
+                        }
+                    }
+                    Label { text: "Eclipse SSH"; font.weight: Font.DemiBold; font.pixelSize: Theme.typeTitleMedium; color: Theme.onSurface }
                     Item { Layout.fillWidth: true }
-                    ToolButton {
-                        text: "+"
-                        font.pixelSize: 16
-                        width: 30; height: 30
-                        ToolTip.text: qsTr("New connection"); ToolTip.visible: hovered; ToolTip.delay: 550
+                    IconToolButton {
+                        icon: "add"; toolTip: qsTr("New connection")
                         onClicked: profileDialog.openNew()
                     }
                 }
@@ -249,7 +254,6 @@ ApplicationWindow {
                     id: searchField
                     Layout.fillWidth: true
                     placeholderText: qsTr("Search connections…")
-                    font.pixelSize: 12
                 }
 
                 ScrollView {
@@ -273,35 +277,39 @@ ApplicationWindow {
                         delegate: ItemDelegate {
                             id: connItem
                             width: connList.width
-                            height: 50
+                            height: Theme.listHeight
                             hoverEnabled: true
                             highlighted: currentSession !== null && currentSession.profileId === model.id
                             onClicked: root.connectToProfile(model.id)
 
                             background: Rectangle {
-                                radius: Theme.radiusS
-                                color: connItem.highlighted ? Theme.accentSoft
-                                                            : (connItem.hovered ? Theme.hover : "transparent")
-                                Behavior on color { ColorAnimation { duration: 120 } }
+                                radius: Theme.radiusM
+                                color: connItem.highlighted ? Theme.secondaryContainer
+                                                            : (connItem.hovered ? Theme.alpha(Theme.onSurface, Theme.stateHover) : "transparent")
+                                Behavior on color { ColorAnimation { duration: Theme.durFast } }
                             }
 
                             contentItem: RowLayout {
-                                spacing: 8
+                                spacing: 10
                                 StatusDot { sessionState: model.state }
                                 ColumnLayout {
                                     spacing: 1
                                     Layout.fillWidth: true
-                                    Label { text: model.name; color: Theme.text; font.pixelSize: 13;
+                                    Label { text: model.name; color: connItem.highlighted ? Theme.onSecondaryContainer : Theme.onSurface; font.pixelSize: Theme.typeBodyMedium;
                                         elide: Text.ElideRight; Layout.fillWidth: true }
                                     Label {
                                         text: model.state !== "Idle" ? model.state + "  ·  " + model.userHost
                                                                      : model.userHost
-                                        color: Theme.textMuted; font.pixelSize: 10;
+                                        color: connItem.highlighted ? Theme.alpha(Theme.onSecondaryContainer, 0.75) : Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelMedium;
                                         elide: Text.ElideRight; Layout.fillWidth: true
                                     }
                                 }
-                                Label { text: model.favorite ? "★" : "○";
-                                    color: model.favorite ? "#e2b12c" : Theme.textMuted; font.pixelSize: 12 }
+                                MaterialIcon {
+                                    icon: "star"
+                                    filled: model.favorite
+                                    iconSize: 18
+                                    color: model.favorite ? Theme.tertiary : Theme.outline
+                                }
                             }
 
                             Menu {
@@ -352,8 +360,8 @@ ApplicationWindow {
                 }
 
                 RowLayout {
-                    Button { text: qsTr("New"); flat: true; onClicked: profileDialog.openNew() }
-                    Button { text: qsTr("Quick"); flat: true; onClicked: quickConnectDialog.openDialog() }
+                    FlatButton { text: qsTr("New"); iconName: "add"; onClicked: profileDialog.openNew() }
+                    FlatButton { text: qsTr("Quick"); iconName: "bolt"; onClicked: quickConnectDialog.openDialog() }
                     Item { Layout.fillWidth: true }
                 }
             }
@@ -368,40 +376,40 @@ ApplicationWindow {
         ColumnLayout {
             Layout.fillWidth: true; Layout.fillHeight: true; spacing: 0
 
-            // toolbar
+            // MD3 top app bar
             Rectangle {
-                Layout.fillWidth: true; Layout.preferredHeight: 50; color: Theme.surface
-                Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.border }
+                Layout.fillWidth: true; Layout.preferredHeight: Theme.appBarHeight; color: Theme.surface
+                Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.outlineVariant }
                 RowLayout {
-                    anchors.fill: parent; anchors.margins: 8; spacing: 6
-                    FlatButton { text: qsTr("New"); glyph: "＋"; ToolTip.text: qsTr("New connection profile")
+                    anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; spacing: 4
+                    FlatButton { text: qsTr("New"); iconName: "add"; ToolTip.text: qsTr("New connection profile")
                         onClicked: profileDialog.openNew() }
-                    FlatButton { text: qsTr("Connect"); glyph: "»"; ToolTip.text: qsTr("Quick connect")
+                    FlatButton { text: qsTr("Connect"); iconName: "double_arrow"; ToolTip.text: qsTr("Quick connect")
                         onClicked: quickConnectDialog.openDialog() }
-                    Rectangle { width: 1; height: 20; color: Theme.border }
-                    FlatButton { text: qsTr("Terminal"); onClicked: root.runCommand("app.new-terminal") }
-                    FlatButton { text: qsTr("Files"); onClicked: root.runCommand("app.open-sftp") }
-                    FlatButton { text: qsTr("Tunnel"); onClicked: forwardDialog.openDialog() }
-                    FlatButton { text: qsTr("Runner"); onClicked: runnerDialog.openDialog() }
+                    Rectangle { width: 1; height: 22; color: Theme.outlineVariant; Layout.leftMargin: 6; Layout.rightMargin: 6 }
+                    FlatButton { text: qsTr("Terminal"); iconName: "terminal"; onClicked: root.runCommand("app.new-terminal") }
+                    FlatButton { text: qsTr("Files"); iconName: "folder"; onClicked: root.runCommand("app.open-sftp") }
+                    FlatButton { text: qsTr("Tunnel"); iconName: "alt_route"; onClicked: forwardDialog.openDialog() }
+                    FlatButton { text: qsTr("Runner"); iconName: "play_arrow"; onClicked: runnerDialog.openDialog() }
                     Item { Layout.fillWidth: true }
                     FlatButton {
-                        text: qsTr("Disconnect"); danger: true
+                        text: qsTr("Disconnect"); danger: true; variant: "tonal"; iconName: "link_off"
                         visible: currentSession !== null && currentSession.state !== "Idle"
                                  && currentSession.state !== "Disconnected"
                         onClicked: if (currentSession) App.disconnectSession(currentSession.sessionId)
                     }
-                    FlatButton { text: qsTr("Palette"); showBorder: true; onClicked: paletteDialog.openDialog() }
-                    FlatButton { text: qsTr("Settings"); onClicked: root.openPage("settings") }
+                    FlatButton { text: qsTr("Palette"); iconName: "manage_search"; onClicked: paletteDialog.openDialog() }
+                    FlatButton { text: qsTr("Settings"); iconName: "settings"; onClicked: root.openPage("settings") }
                 }
             }
 
-            // ======== session tab strip (custom: big, closable, scrollable) ========
+            // ======== session tab strip — MD3 primary tabs ========
             Rectangle {
                 Layout.fillWidth: true
                 height: Theme.tabHeight
                 visible: sessionTabsModel.count > 0
                 color: Theme.surface
-                Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.border }
+                Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.outlineVariant }
 
                 Flickable {
                     anchors.fill: parent
@@ -413,7 +421,7 @@ ApplicationWindow {
 
                     Row {
                         id: tabRow
-                        x: 4
+                        x: 6
                         height: parent.height
                         spacing: 4
 
@@ -422,19 +430,20 @@ ApplicationWindow {
 
                             delegate: Rectangle {
                                 id: tabDelegate
-                                width: Math.max(150, Math.min(200, tabName.implicitWidth + 68))
-                                height: parent ? parent.height : Theme.tabHeight
+                                width: Math.max(170, Math.min(230, tabName.implicitWidth + 84))
+                                height: parent ? parent.height - 6 : Theme.tabHeight - 6
+                                y: 3
                                 property bool isChecked: root.currentTab === index
                                 property bool tabHovered: tabMouse.containsMouse
-                                radius: Theme.radiusS
-                                color: isChecked ? Theme.surfaceAlt
-                                                 : (tabHovered ? Theme.hover : "transparent")
-                                Behavior on color { ColorAnimation { duration: 130 } }
+                                radius: Theme.radiusM
+                                color: isChecked ? Theme.surfaceContainerHighest
+                                                 : (tabHovered ? Theme.alpha(Theme.onSurface, Theme.stateHover) : "transparent")
+                                Behavior on color { ColorAnimation { duration: Theme.durFast } }
 
                                 RowLayout {
                                     anchors.fill: parent
-                                    anchors.leftMargin: 12
-                                    anchors.rightMargin: 6
+                                    anchors.leftMargin: 14
+                                    anchors.rightMargin: 8
                                     spacing: 8
 
                                     StatusDot { sessionState: model.state }
@@ -442,31 +451,28 @@ ApplicationWindow {
                                     Label {
                                         id: tabName
                                         text: model.name
-                                        font.pixelSize: 13
-                                        font.weight: tabDelegate.isChecked ? Font.DemiBold : Font.Normal
-                                        color: tabDelegate.isChecked ? Theme.text : Theme.textMuted
+                                        font.pixelSize: Theme.typeTitleSmall
+                                        font.weight: tabDelegate.isChecked ? Font.Medium : Font.Normal
+                                        color: tabDelegate.isChecked ? Theme.onSurface : Theme.onSurfaceVariant
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
-                                        Behavior on color { ColorAnimation { duration: 130 } }
+                                        Behavior on color { ColorAnimation { duration: Theme.durFast } }
                                     }
 
-                                    ToolButton {
+                                    Rectangle {
                                         id: tabClose
-                                        width: 22; height: 22
+                                        width: 24; height: 24; radius: 12
                                         opacity: (tabDelegate.isChecked || tabDelegate.tabHovered) ? 1 : 0
-                                        Behavior on opacity { NumberAnimation { duration: 120 } }
-                                        contentItem: Label {
-                                            text: "✕"; font.pixelSize: 11
-                                            color: tabCloseMouse.containsMouse ? Theme.error : Theme.textMuted
+                                        Behavior on opacity { NumberAnimation { duration: Theme.durFast } }
+
+                                        MaterialIcon {
                                             anchors.centerIn: parent
+                                            icon: "close"; iconSize: 14
+                                            color: tabCloseMouse.containsMouse ? Theme.onErrorContainer : Theme.onSurfaceVariant
                                         }
-                                        background: Rectangle {
-                                            radius: 4
-                                            color: tabCloseMouse.containsMouse
-                                                   ? Qt.rgba(Theme.error.r, Theme.error.g, Theme.error.b, 0.14)
-                                                   : "transparent"
-                                            Behavior on color { ColorAnimation { duration: 100 } }
-                                        }
+                                        color: tabCloseMouse.containsMouse ? Theme.errorContainer : "transparent"
+                                        Behavior on color { ColorAnimation { duration: Theme.durFast } }
+
                                         MouseArea {
                                             id: tabCloseMouse
                                             anchors.fill: parent
@@ -480,16 +486,17 @@ ApplicationWindow {
                                     }
                                 }
 
-                                // active underline
+                                // MD3 active indicator: rounded 3dp pill under the tab
                                 Rectangle {
                                     anchors.bottom: parent.bottom
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    width: parent.width - 20
-                                    height: 2
-                                    radius: 1
-                                    color: Theme.accent
+                                    width: parent.width - 24
+                                    height: 3
+                                    radius: 1.5
+                                    color: Theme.primary
                                     opacity: tabDelegate.isChecked ? 1 : 0
-                                    Behavior on opacity { NumberAnimation { duration: 150 } }
+                                    Behavior on opacity { NumberAnimation { duration: Theme.durMed } }
+                                    Behavior on width { NumberAnimation { duration: Theme.durMed; easing.type: Easing.OutCubic } }
                                 }
 
                                 MouseArea {
@@ -575,10 +582,10 @@ ApplicationWindow {
                 SettingsPage {}
             }
 
-            // status bar
+            // MD3 status bar
             Rectangle {
-                Layout.fillWidth: true; Layout.preferredHeight: 28; color: Theme.surfaceAlt
-                Rectangle { width: parent.width; height: 1; color: Theme.border }
+                Layout.fillWidth: true; Layout.preferredHeight: Theme.statusBarHeight; color: Theme.surfaceContainer
+                Rectangle { width: parent.width; height: 1; color: Theme.outlineVariant }
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; spacing: 8
                     StatusDot { sessionState: currentSession ? currentSession.state : "Idle" }
@@ -590,11 +597,11 @@ ApplicationWindow {
                                        ? "  ·  " + currentSession.latencyMs + " ms" : "")
                                     + "  ·  " + currentSession.engineName;
                         }
-                        color: currentSession && currentSession.connected ? Theme.success : Theme.textMuted
-                        font.pixelSize: 11
+                        color: currentSession && currentSession.connected ? Theme.success : Theme.onSurfaceVariant
+                        font.pixelSize: Theme.typeLabelMedium
                     }
                     Item { Layout.fillWidth: true }
-                    Label { text: qsTr("%1 connection(s)").arg(App.sessions.rowCount()); color: Theme.textMuted; font.pixelSize: 11 }
+                    Label { text: qsTr("%1 connection(s)").arg(App.sessions.rowCount()); color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelMedium }
                 }
             }
         }
@@ -734,20 +741,26 @@ ApplicationWindow {
                 spacing: 12
                 Rectangle {
                     width: 40; height: 40; radius: 20
-                    color: Qt.rgba(Theme.error.r, Theme.error.g, Theme.error.b, 0.15)
-                    Label { anchors.centerIn: parent; text: "✕"; color: Theme.error;
-                            font.pixelSize: 17; font.bold: true }
+                    color: Theme.errorContainer
+                    MaterialIcon { anchors.centerIn: parent; icon: "error"; iconSize: 22;
+                            color: Theme.onErrorContainer }
                 }
                 Label { text: errorDialog.friendly; wrapMode: Text.Wrap; Layout.maximumWidth: 380;
-                        Layout.fillWidth: true; color: Theme.text; font.pixelSize: 14 }
+                        Layout.fillWidth: true; color: Theme.onSurface; font.pixelSize: Theme.typeBodyLarge }
             }
             Label { text: qsTr("Details:") + " " + errorDialog.technical; wrapMode: Text.WrapAnywhere;
-                    Layout.maximumWidth: 430; font.pixelSize: 11; color: Theme.textMuted
+                    Layout.maximumWidth: 430; font.pixelSize: Theme.typeLabelMedium; color: Theme.onSurfaceVariant
                     visible: errorDialog.technical.length > 0 }
-            Label { text: errorDialog.hint; wrapMode: Text.Wrap; Layout.maximumWidth: 430; color: Theme.warning;
-                    visible: errorDialog.hint.length > 0; font.pixelSize: 11 }
+            RowLayout {
+                spacing: 6
+                visible: errorDialog.hint.length > 0
+                Layout.maximumWidth: 430
+                MaterialIcon { icon: "lightbulb"; iconSize: 16; color: Theme.warning }
+                Label { text: errorDialog.hint; wrapMode: Text.Wrap; Layout.fillWidth: true; color: Theme.warning;
+                        font.pixelSize: Theme.typeLabelMedium }
+            }
             FlatButton {
-                text: qsTr("Copy details"); showBorder: true; glyph: "⧉"
+                text: qsTr("Copy details"); iconName: "content_copy"
                 visible: errorDialog.technical.length > 0
                 onClicked: {
                     const all = errorDialog.friendly + "\n" + errorDialog.technical
@@ -774,7 +787,7 @@ ApplicationWindow {
         function openExport() { importMode = false; open(); }
     }
 
-    // toast (animated, iconized, auto-dismiss)
+    // MD3 snackbar (inverse surface, tonal avatar, animated, auto-dismiss)
     Rectangle {
         id: toastLoader
         property string title: ""; property string body: ""; property bool isError: false
@@ -782,15 +795,13 @@ ApplicationWindow {
         opacity: 0
         anchors.bottom: parent.bottom; anchors.right: parent.right; anchors.margins: 18
         width: Math.min(440, parent.width - 40)
-        height: Math.max(62, toastCol.implicitHeight + 20)
+        height: Math.max(64, toastCol.implicitHeight + 20)
         radius: Theme.radiusM
-        color: Theme.surface
-        border.color: toastLoader.isError ? Theme.error : Theme.accent
-        border.width: 1
+        color: Theme.inverseSurface
         z: 999
         transform: Translate {
             id: toastShift
-            Behavior on y { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+            Behavior on y { NumberAnimation { duration: Theme.durMed; easing.type: Easing.OutCubic } }
         }
         onVisibleChanged: {
             if (visible) {
@@ -800,31 +811,29 @@ ApplicationWindow {
                 toastTimer.restart();
             }
         }
-        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: Theme.durMed; easing.type: Easing.OutCubic } }
         RowLayout {
             id: toastCol
             anchors.fill: parent; anchors.margins: 12; spacing: 10
             Rectangle {
-                width: 30; height: 30; radius: 15
-                color: toastLoader.isError ? Qt.rgba(Theme.error.r, Theme.error.g, Theme.error.b, 0.15)
-                                           : Theme.accentSoft
-                Label { anchors.centerIn: parent; text: toastLoader.isError ? "✕" : "✔"
-                        color: toastLoader.isError ? Theme.error : Theme.accent
-                        font.pixelSize: 14; font.bold: true }
+                width: 32; height: 32; radius: 16
+                color: toastLoader.isError ? Theme.error : Theme.success
+                MaterialIcon {
+                    anchors.centerIn: parent
+                    icon: toastLoader.isError ? "error" : "check_circle"; iconSize: 18
+                    color: toastLoader.isError ? Theme.onError : Theme.onSuccess
+                }
             }
             ColumnLayout {
                 Layout.fillWidth: true; spacing: 2
-                Label { text: toastLoader.title; font.weight: Font.DemiBold; color: Theme.text;
-                        font.pixelSize: 13; Layout.fillWidth: true }
-                Label { id: toastText; text: toastLoader.body; wrapMode: Text.Wrap; color: Theme.textMuted;
-                        font.pixelSize: 12; Layout.fillWidth: true; visible: text.length > 0 }
+                Label { text: toastLoader.title; font.weight: Font.Medium; color: Theme.inverseOnSurface;
+                        font.pixelSize: Theme.typeBodyMedium; Layout.fillWidth: true }
+                Label { id: toastText; text: toastLoader.body; wrapMode: Text.Wrap; color: Theme.alpha(Theme.inverseOnSurface, 0.8);
+                        font.pixelSize: Theme.typeBodySmall; Layout.fillWidth: true; visible: text.length > 0 }
             }
-            ToolButton {
-                text: "✕"
-                width: 26; height: 26
+            IconToolButton {
+                icon: "close"; iconSize: 16
                 onClicked: { toastTimer.stop(); toastLoader.opacity = 0; toastShift.y = 10; toastHideTimer.restart() }
-                contentItem: Label { text: "✕"; font.pixelSize: 11; color: Theme.textMuted; anchors.centerIn: parent }
-                background: Rectangle { radius: 4; color: parent.hovered ? Theme.hover : "transparent" }
             }
         }
         Timer { id: toastTimer; interval: 4500; onTriggered: {

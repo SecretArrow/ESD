@@ -3,21 +3,36 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Eclipse.Internal 1.0
 
+// Module import: gives access to the Theme singleton and MD3 components.
+import Eclipse
+
 Rectangle {
-    radius: 10
+    radius: Theme.radiusL
     color: Theme.surface
-    border.color: Theme.border
+    border.color: Theme.outlineVariant
     z: 500
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 8
-        spacing: 4
+        anchors.margins: 12
+        spacing: 8
         RowLayout {
             Layout.fillWidth: true
-            Label { text: qsTr("Transfers"); font.weight: Font.DemiBold; color: Theme.text }
+            spacing: 8
+            MaterialIcon { icon: "swap_horiz"; iconSize: 18; color: Theme.primary }
+            Label {
+                text: qsTr("Transfers")
+                font.pixelSize: Theme.typeTitleMedium
+                font.weight: Font.Medium
+                color: Theme.onSurface
+            }
             Item { Layout.fillWidth: true }
-            Button { flat: true; text: qsTr("Clear finished"); onClicked: Transfers.clearFinished() }
+            FlatButton {
+                text: qsTr("Clear finished")
+                iconName: "delete"
+                small: true
+                onClicked: Transfers.clearFinished()
+            }
         }
         ListView {
             Layout.fillWidth: true
@@ -27,17 +42,45 @@ Rectangle {
             spacing: 2
             delegate: RowLayout {
                 width: ListView.view.width
-                Label { text: direction === "upload" ? "↑" : "↓"; color: Theme.accent }
-                Label { text: title; color: Theme.text; font.pixelSize: 11; Layout.preferredWidth: 200
-                    elide: Text.ElideRight }
+                spacing: 10
+                MaterialIcon {
+                    icon: direction === "upload" ? "file_upload" : "file_download"
+                    iconSize: 18
+                    color: Theme.primary
+                }
+                Label {
+                    text: title
+                    color: Theme.onSurface
+                    font.pixelSize: Theme.typeLabelMedium
+                    Layout.preferredWidth: 200
+                    elide: Text.ElideRight
+                }
                 ProgressBar { value: progress; Layout.preferredWidth: 160 }
-                Label { text: transferred + " / " + total; color: Theme.textMuted; font.pixelSize: 10 }
-                Label { text: speed; color: Theme.textMuted; font.pixelSize: 10 }
-                Label { text: qsTr("ETA") + " " + eta; color: Theme.textMuted; font.pixelSize: 10 }
-                Label { text: stateName; color: state === 4 ? Theme.error : state === 3 ? Theme.success : Theme.textMuted; font.pixelSize: 10 }
-                Button { flat: true; text: state === 1 ? "⏸" : "▶"; onClicked: state === 1 ? Transfers.pause(index) : Transfers.resume(index) }
-                Button { flat: true; text: "✕"; onClicked: Transfers.cancel(index) }
-                Button { flat: true; visible: state === 4 || state === 5; text: "↻"; onClicked: Transfers.retry(index) }
+                Label { text: transferred + " / " + total; color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelSmall }
+                Label { text: speed; color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelSmall }
+                Label { text: qsTr("ETA") + " " + eta; color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelSmall }
+                Label {
+                    text: stateName
+                    color: state === 4 ? Theme.error : state === 3 ? Theme.success : Theme.onSurfaceVariant
+                    font.pixelSize: Theme.typeLabelSmall
+                }
+                IconToolButton {
+                    icon: state === 1 ? "pause" : "play_arrow"
+                    iconSize: 18
+                    onClicked: state === 1 ? Transfers.pause(index) : Transfers.resume(index)
+                }
+                IconToolButton {
+                    icon: "close"
+                    iconSize: 18
+                    danger: true
+                    onClicked: Transfers.cancel(index)
+                }
+                IconToolButton {
+                    icon: "refresh"
+                    iconSize: 18
+                    visible: state === 4 || state === 5
+                    onClicked: Transfers.retry(index)
+                }
             }
         }
     }

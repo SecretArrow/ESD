@@ -39,9 +39,16 @@ Dialog {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 6
+        spacing: 12
 
-        Label { id: errorLabel; visible: false; color: Theme.error; wrapMode: Text.Wrap; Layout.fillWidth: true }
+        Label {
+            id: errorLabel
+            visible: false
+            color: Theme.error
+            font.pixelSize: Theme.typeBodySmall
+            wrapMode: Text.Wrap
+            Layout.fillWidth: true
+        }
 
         // list page
         ColumnLayout {
@@ -49,26 +56,52 @@ Dialog {
             visible: true
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 6
+            spacing: 8
             ListView {
                 id: entryList
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 model: ListModel { id: entriesModel }
                 clip: true
+                spacing: 2
                 delegate: RowLayout {
                     width: entryList.width
-                    Label { text: isDir ? "📁" : "📄" }
-                    Label { text: path; color: Theme.text; font.pixelSize: 12; font.family: "monospace";
-                        elide: Text.ElideMiddle; Layout.fillWidth: true }
-                    Label { text: isDir ? "" : (size / 1024).toFixed(1) + " KB"; color: Theme.textMuted; font.pixelSize: 10 }
+                    spacing: 10
+                    MaterialIcon {
+                        icon: isDir ? "folder" : "description"
+                        iconSize: 18
+                        color: isDir ? Theme.primary : Theme.onSurfaceVariant
+                    }
+                    Label {
+                        text: path
+                        color: Theme.onSurface
+                        font.pixelSize: Theme.typeBodySmall
+                        font.family: "monospace"
+                        elide: Text.ElideMiddle
+                        Layout.fillWidth: true
+                    }
+                    Label {
+                        text: isDir ? "" : (size / 1024).toFixed(1) + " KB"
+                        color: Theme.onSurfaceVariant
+                        font.pixelSize: Theme.typeLabelMedium
+                    }
                     CheckBox { text: ""; checked: false; onCheckedChanged: selectedFlags[path] = checked }
                 }
             }
             RowLayout {
-                Button { text: qsTr("Extract selected…"); onClicked: extractDialog.open() }
+                spacing: 12
+                FlatButton {
+                    text: qsTr("Extract selected…")
+                    iconName: "unarchive"
+                    accent: true
+                    onClicked: extractDialog.open()
+                }
                 Item { Layout.fillWidth: true }
-                Label { text: qsTr("%1 entries").arg(entriesModel.count); color: Theme.textMuted; font.pixelSize: 11 }
+                Label {
+                    text: qsTr("%1 entries").arg(entriesModel.count)
+                    color: Theme.onSurfaceVariant
+                    font.pixelSize: Theme.typeLabelMedium
+                }
             }
         }
 
@@ -78,12 +111,24 @@ Dialog {
             visible: false
             Layout.fillWidth: true
             Layout.fillHeight: true
+            spacing: 12
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                TextArea { id: previewArea; readOnly: true; font.family: "monospace"; font.pixelSize: 11; wrapMode: Text.NoWrap; color: Theme.text }
+                TextArea {
+                    id: previewArea
+                    readOnly: true
+                    font.family: "monospace"
+                    font.pixelSize: Theme.typeBodySmall
+                    wrapMode: Text.NoWrap
+                    color: Theme.onSurface
+                }
             }
-            Button { text: qsTr("← Back to list"); onClicked: { previewPage.visible = false; listPage.visible = true } }
+            FlatButton {
+                text: qsTr("Back to list")
+                iconName: "arrow_back"
+                onClicked: { previewPage.visible = false; listPage.visible = true }
+            }
         }
     }
 
@@ -96,7 +141,12 @@ Dialog {
         parent: Overlay.overlay
         anchors.centerIn: parent
         standardButtons: Dialog.Ok | Dialog.Cancel
-        TextField { id: dirField; text: App.session(dlg.session.sessionId) ? "" : ""; placeholderText: "/tmp/eclipse-extract or local folder"; Layout.fillWidth: true }
+        TextField {
+            id: dirField
+            text: App.session(dlg.session.sessionId) ? "" : ""
+            placeholderText: "/tmp/eclipse-extract or local folder"
+            Layout.fillWidth: true
+        }
         onAccepted: {
             const entries = [];
             for (const k in dlg.selectedFlags) if (dlg.selectedFlags[k]) entries.push(k);

@@ -158,6 +158,7 @@ foreach(qmlfile ${ECLIPSE_QML_ABS})
     file(RELATIVE_PATH relpath ${CMAKE_SOURCE_DIR} ${qmlfile})
     set_source_files_properties(${qmlfile} PROPERTIES QT_RESOURCE_ALIAS ${relpath})
 endforeach()
+set_source_files_properties(${CMAKE_SOURCE_DIR}/qml/IconMap.js PROPERTIES QT_RESOURCE_ALIAS "qml/IconMap.js")
 
 set(ECLIPSE_QML_FILES
     ${CMAKE_SOURCE_DIR}/qml/Main.qml
@@ -184,6 +185,9 @@ set(ECLIPSE_QML_FILES
     ${CMAKE_SOURCE_DIR}/qml/FlatButton.qml
     ${CMAKE_SOURCE_DIR}/qml/StatusDot.qml
     ${CMAKE_SOURCE_DIR}/qml/pages/MonitorPane.qml
+    ${CMAKE_SOURCE_DIR}/qml/MaterialIcon.qml
+    ${CMAKE_SOURCE_DIR}/qml/IconToolButton.qml
+    ${CMAKE_SOURCE_DIR}/qml/IconMap.js
 )
 
 qt_add_executable(eclipse-ssh-desktop WIN32
@@ -232,6 +236,21 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/resources/appicon.png PROPERTIES
 qt_add_resources(eclipse-ssh-desktop "icons"
     PREFIX "/"
     FILES ${CMAKE_SOURCE_DIR}/resources/appicon.png)
+
+# Material Design 3 runtime assets:
+#  - EclipseMD3 Quick Controls style (qmldir + Templates components)
+#  - Material Symbols Rounded icon fonts (subset, outlined + filled)
+file(GLOB ECLIPSE_MD3_STYLE_FILES
+    ${CMAKE_SOURCE_DIR}/qml/style/EclipseMD3/qmldir
+    ${CMAKE_SOURCE_DIR}/qml/style/EclipseMD3/*.qml)
+qt_add_resources(eclipse-ssh-desktop "md3style"
+    PREFIX "/style/EclipseMD3"
+    FILES ${ECLIPSE_MD3_STYLE_FILES})
+qt_add_resources(eclipse-ssh-desktop "md3fonts"
+    PREFIX "/fonts"
+    FILES
+        ${CMAKE_SOURCE_DIR}/resources/fonts/MaterialSymbolsRounded.ttf
+        ${CMAKE_SOURCE_DIR}/resources/fonts/MaterialSymbolsRounded-Fill.ttf)
 
 if(WIN32)
     # Windows binary identity: embed the multi-size application icon and a

@@ -45,30 +45,24 @@ Rectangle {
             // LOCAL path pill
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 34
+                Layout.preferredHeight: 40
                 radius: Theme.radiusS
-                color: Theme.surfaceAlt
+                color: Theme.surfaceContainer
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: 10
                     anchors.rightMargin: 3
                     spacing: 4
-                    Label { text: qsTr("LOCAL"); color: Theme.textMuted; font.pixelSize: 10 }
+                    Label { text: qsTr("LOCAL"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelSmall; font.letterSpacing: 0.8 }
                     TextField {
                         id: localPathField
-                        Layout.fillWidth: true; text: localModel.path
+                        Layout.fillWidth: true; Layout.fillHeight: true; text: localModel.path
                         onEditingFinished: localModel.path = text
                         font.pixelSize: 12
-                        background: Rectangle {
-                            implicitHeight: 26
-                            radius: Theme.radiusS
-                            color: "transparent"
-                            border.width: localPathField.activeFocus ? 1 : 0
-                            border.color: localPathField.activeFocus ? Theme.accent : "transparent"
-                        }
                     }
                     FlatButton {
-                        glyph: "↑"
+                        iconName: "arrow_upward"
+                        small: true
                         ToolTip.text: qsTr("Parent directory")
                         onClicked: localModel.goUp()
                     }
@@ -78,41 +72,38 @@ Rectangle {
             // REMOTE path pill
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 34
+                Layout.preferredHeight: 40
                 radius: Theme.radiusS
-                color: Theme.surfaceAlt
+                color: Theme.surfaceContainer
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: 10
                     anchors.rightMargin: 3
                     spacing: 4
-                    Label { text: qsTr("REMOTE"); color: Theme.textMuted; font.pixelSize: 10 }
+                    Label { text: qsTr("REMOTE"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeLabelSmall; font.letterSpacing: 0.8 }
                     TextField {
                         id: remotePathField
-                        Layout.fillWidth: true; text: remoteModel.path
+                        Layout.fillWidth: true; Layout.fillHeight: true; text: remoteModel.path
                         onEditingFinished: remoteModel.path = text
                         font.pixelSize: 12
-                        background: Rectangle {
-                            implicitHeight: 26
-                            radius: Theme.radiusS
-                            color: "transparent"
-                            border.width: remotePathField.activeFocus ? 1 : 0
-                            border.color: remotePathField.activeFocus ? Theme.accent : "transparent"
-                        }
                     }
                     FlatButton {
-                        glyph: "↑"
+                        iconName: "arrow_upward"
+                        small: true
                         ToolTip.text: qsTr("Parent directory")
                         onClicked: remoteModel.goUp()
                     }
                     FlatButton {
-                        glyph: "⟳"
+                        iconName: "sync"
+                        small: true
                         ToolTip.text: qsTr("Refresh")
                         onClicked: { localModel.refresh(); remoteModel.refresh() }
                     }
                     FlatButton {
                         text: qsTr("Terminal here")
-                        showBorder: true
+                        iconName: "terminal"
+                        variant: "outlined"
+                        small: true
                         ToolTip.text: qsTr("Open a terminal in the remote directory")
                         onClicked: if (session && session.connected) {
                             App.openTerminalFor(session.sessionId);
@@ -143,12 +134,12 @@ Rectangle {
                     visible: localList.count === 0
                     anchors.centerIn: parent
                     text: qsTr("Local directory is empty")
-                    color: Theme.textMuted
+                    color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodyMedium
                 }
             }
 
-            // ---- middle actions ----
-            Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: Theme.border }
+            // ---- middle separator ----
+            Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: Theme.outlineVariant }
 
             ColumnLayout {
                 Layout.preferredWidth: 92
@@ -156,13 +147,13 @@ Rectangle {
                 Item { Layout.fillHeight: true }
                 FlatButton {
                     Layout.fillWidth: true
-                    glyph: "↑"
+                    iconName: "file_upload"
                     ToolTip.text: qsTr("Upload")
                     onClicked: uploadSelected()
                 }
                 FlatButton {
                     Layout.fillWidth: true
-                    glyph: "↓"
+                    iconName: "file_download"
                     ToolTip.text: qsTr("Download")
                     onClicked: downloadSelected()
                 }
@@ -184,7 +175,7 @@ Rectangle {
                     anchors.centerIn: parent
                     text: session && session.connected ? qsTr("Empty directory")
                           : qsTr("Not connected")
-                    color: Theme.textMuted
+                    color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodyMedium
                 }
                 Row {
                     spacing: 8
@@ -195,7 +186,7 @@ Rectangle {
                     BusyIndicator { running: remoteModel.loading; width: 22; height: 22 }
                     Label {
                         text: qsTr("Loading…")
-                        color: Theme.textMuted; font.pixelSize: 12
+                        color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall
                         anchors.verticalCenter: parent.verticalCenter
                     }
                 }
@@ -206,32 +197,32 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 42
-            color: Theme.surfaceAlt
+            color: Theme.surfaceContainerLow
             RowLayout {
                 anchors.fill: parent; anchors.margins: 4; spacing: 4
-                FlatButton { glyph: "↑"; text: qsTr("Upload")
+                FlatButton { iconName: "file_upload"; text: qsTr("Upload")
                     ToolTip.text: qsTr("Upload selected files to the remote server")
                     onClicked: uploadSelected() }
-                FlatButton { glyph: "↓"; text: qsTr("Download")
+                FlatButton { iconName: "file_download"; text: qsTr("Download")
                     ToolTip.text: qsTr("Download selected files to the local machine")
                     onClicked: downloadSelected() }
-                FlatButton { text: qsTr("Rename")
+                FlatButton { text: qsTr("Rename"); iconName: "edit"
                     ToolTip.text: qsTr("Rename the selected remote item")
                     onClicked: renameRemote() }
-                FlatButton { text: qsTr("Delete"); danger: true
+                FlatButton { text: qsTr("Delete"); iconName: "delete"; danger: true
                     ToolTip.text: qsTr("Delete the selected remote items")
                     onClicked: deleteRemote() }
-                FlatButton { glyph: "＋"; text: qsTr("New folder")
+                FlatButton { iconName: "add"; text: qsTr("New folder")
                     ToolTip.text: qsTr("Create a new folder on the remote server")
                     onClicked: remoteModel.mkdir("new-folder-" + Date.now() % 1000) }
-                FlatButton { text: qsTr("Permissions")
+                FlatButton { text: qsTr("Permissions"); iconName: "tune"
                     ToolTip.text: qsTr("Change permissions of the selected remote item")
                     onClicked: permsRemote() }
-                FlatButton { text: qsTr("View Archive")
+                FlatButton { text: qsTr("View Archive"); iconName: "folder_zip"
                     ToolTip.text: qsTr("Browse the selected archive")
                     onClicked: viewArchive() }
                 Item { Layout.fillWidth: true }
-                Label { font.pixelSize: 10; color: Theme.textMuted
+                Label { font.pixelSize: Theme.typeLabelSmall; color: Theme.onSurfaceVariant
                     text: qsTr("%1 remote items").arg(remoteModel.entryCount) }
                 Item { Layout.preferredWidth: 8 }
             }
@@ -240,7 +231,7 @@ Rectangle {
         Label {
             id: warnLabel
             visible: false
-            color: Theme.warning; font.pixelSize: 12
+            color: Theme.warning; font.pixelSize: Theme.typeBodySmall
             Layout.fillWidth: true
             Layout.leftMargin: 8; Layout.rightMargin: 8; Layout.bottomMargin: 4
             wrapMode: Text.Wrap
@@ -255,25 +246,25 @@ Rectangle {
         ColumnLayout {
             anchors.centerIn: parent
             spacing: 10
-            Label {
-                text: "⇄"
-                font.pixelSize: 36
-                color: Theme.textMuted
+            MaterialIcon {
+                icon: "folder_open"
+                iconSize: 40
+                color: Theme.onSurfaceVariant
                 Layout.alignment: Qt.AlignHCenter
             }
             Label {
                 text: qsTr("No active session")
-                font.pixelSize: 17; font.weight: Font.DemiBold; color: Theme.text
+                font.pixelSize: Theme.typeTitleLarge; font.weight: Font.DemiBold; color: Theme.onSurface
                 Layout.alignment: Qt.AlignHCenter
             }
             Label {
                 text: qsTr("Connect to a server to browse files.")
-                color: Theme.textMuted; font.pixelSize: 13
+                color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodyMedium
                 Layout.alignment: Qt.AlignHCenter
             }
             FlatButton {
                 text: qsTr("Connect")
-                accent: true
+                variant: "filled"
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: 8
                 onClicked: page.connectWanted()
@@ -290,11 +281,6 @@ Rectangle {
             height: 28
             hoverEnabled: true
             highlighted: ListView.view.selection[index] === true
-            background: Rectangle {
-                color: row.highlighted ? Theme.accentSoft
-                     : (row.hovered ? Theme.hover : "transparent")
-                Behavior on color { ColorAnimation { duration: 120 } }
-            }
             onClicked: {
                 if (mouse.modifiers & Qt.ControlModifier)
                     ListView.view.selection[index] = !ListView.view.selection[index];
@@ -333,14 +319,18 @@ Rectangle {
             }
             contentItem: RowLayout {
                 spacing: 6
-                Label { text: isDir ? "📁" : (isLink ? "🔗" : "📄"); font.pixelSize: 13 }
-                Label { text: name; color: Theme.text; font.pixelSize: 12; elide: Text.ElideRight
+                MaterialIcon {
+                    icon: isDir ? "folder" : (isLink ? "link" : "description")
+                    iconSize: 16
+                    color: isDir ? Theme.primary : (isLink ? Theme.tertiary : Theme.onSurfaceVariant)
+                }
+                Label { text: name; color: Theme.onSurface; font.pixelSize: Theme.typeBodySmall; elide: Text.ElideRight
                     Layout.preferredWidth: 150 }
-                Label { text: sizeText; color: Theme.textMuted; font.pixelSize: 12; Layout.preferredWidth: 60
+                Label { text: sizeText; color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall; Layout.preferredWidth: 60
                     horizontalAlignment: Text.AlignRight }
-                Label { text: isDir ? "" : permsText; color: Theme.textMuted; font.pixelSize: 12 }
+                Label { text: isDir ? "" : permsText; color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall }
                 Item { Layout.fillWidth: true }
-                Label { text: isDir ? "" : mtimeText; color: Theme.textMuted; font.pixelSize: 12 }
+                Label { text: isDir ? "" : mtimeText; color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall }
                 Item { Layout.preferredWidth: 6 }
             }
         }
@@ -439,7 +429,7 @@ Rectangle {
         title: qsTr("Confirm"); modal: true
         parent: Overlay.overlay; anchors.centerIn: parent
         standardButtons: Dialog.Yes | Dialog.No
-        Label { text: confirmDialog.text; color: Theme.text }
+        Label { text: confirmDialog.text; color: Theme.onSurface }
         onAccepted: if (action) action()
     }
     Dialog {

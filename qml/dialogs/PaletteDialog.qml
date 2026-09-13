@@ -21,16 +21,29 @@ Dialog {
     function openDialog() { query = ""; paletteList.refresh(); open(); queryField.forceActiveFocus() }
 
     contentItem: ColumnLayout {
-        TextField {
-            id: queryField
+        spacing: 12
+
+        // Search field with leading glyph (MD3 search bar)
+        RowLayout {
+            spacing: 10
             Layout.fillWidth: true
-            placeholderText: qsTr("Type a command…")
-            onTextChanged: { dlg.query = text; paletteList.refresh() }
+            MaterialIcon {
+                icon: "search"
+                iconSize: 20
+                color: Theme.onSurfaceVariant
+            }
+            TextField {
+                id: queryField
+                Layout.fillWidth: true
+                placeholderText: qsTr("Type a command…")
+                onTextChanged: { dlg.query = text; paletteList.refresh() }
+            }
         }
+
         ListView {
             id: paletteList
             Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(360, count * 34 + 4)
+            Layout.preferredHeight: Math.min(360, count * 36 + 4)
             clip: true
             function refresh() {
                 paletteModel.clear();
@@ -43,11 +56,30 @@ Dialog {
             model: ListModel { id: paletteModel }
             delegate: ItemDelegate {
                 width: paletteList.width
-                height: 32
+                height: 36
                 onClicked: { dlg.commandPicked(model.id); dlg.close() }
                 contentItem: RowLayout {
-                    Label { text: category; color: Theme.textMuted; font.pixelSize: 10; Layout.preferredWidth: 90 }
-                    Label { text: title; color: Theme.text; font.pixelSize: 13 }
+                    spacing: 12
+                    Label {
+                        text: category
+                        color: Theme.onSurfaceVariant
+                        font.pixelSize: Theme.typeLabelSmall
+                        Layout.preferredWidth: 90
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        text: title
+                        color: Theme.onSurface
+                        font.pixelSize: Theme.typeBodyMedium
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                    MaterialIcon {
+                        icon: "keyboard_return"
+                        iconSize: 14
+                        color: Theme.onSurfaceVariant
+                        visible: paletteList.currentIndex === index
+                    }
                 }
             }
         }

@@ -28,38 +28,100 @@ Dialog {
     property var root2: null
 
     contentItem: ColumnLayout {
-        spacing: 8
-        Label { text: qsTr("Rules are saved to the connection profile. Auto-start rules launch on connect.")
-                color: Theme.textMuted; font.pixelSize: 11 }
+        spacing: 12
+
+        Label {
+            text: qsTr("Rules are saved to the connection profile. Auto-start rules launch on connect.")
+            color: Theme.onSurfaceVariant
+            font.pixelSize: Theme.typeBodySmall
+            wrapMode: Text.Wrap
+            Layout.fillWidth: true
+        }
+
         ListView {
             id: rulesList
             Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(220, rulesModel.count * 30 + 4)
+            Layout.preferredHeight: Math.min(220, rulesModel.count * 36 + 4)
+            clip: true
+            spacing: 4
             model: ListModel { id: rulesModel }
             delegate: RowLayout {
                 width: rulesList.width
-                Label { text: type === "dynamic" ? "SOCKS5" : type; color: Theme.accent; font.pixelSize: 11; Layout.preferredWidth: 62 }
-                Label { text: listenAddress + ":" + listenPort; color: Theme.text; font.pixelSize: 12; Layout.preferredWidth: 130 }
-                Label { text: type === "dynamic" ? "→ dynamic" : "→ " + destHost + ":" + destPort;
-                    color: Theme.textMuted; font.pixelSize: 12; Layout.fillWidth: true }
+                spacing: 10
+
+                // rule-type chip (MD3: full-round tonal chip)
+                Rectangle {
+                    Layout.preferredWidth: 62
+                    implicitHeight: 20
+                    radius: Theme.radiusFull
+                    color: Theme.secondaryContainer
+                    Label {
+                        anchors.centerIn: parent
+                        text: type === "dynamic" ? "SOCKS5" : type
+                        color: Theme.onSecondaryContainer
+                        font.pixelSize: Theme.typeLabelMedium
+                    }
+                }
+                Label {
+                    text: listenAddress + ":" + listenPort
+                    color: Theme.onSurface
+                    font.pixelSize: Theme.typeBodySmall
+                    font.family: "monospace"
+                    Layout.preferredWidth: 130
+                }
+                RowLayout {
+                    spacing: 4
+                    Layout.fillWidth: true
+                    MaterialIcon { icon: "arrow_forward"; iconSize: 14; color: Theme.onSurfaceVariant }
+                    Label {
+                        text: type === "dynamic" ? qsTr("dynamic") : destHost + ":" + destPort
+                        color: Theme.onSurfaceVariant
+                        font.pixelSize: Theme.typeBodySmall
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
                 CheckBox { text: qsTr("auto"); checked: autoStart; onCheckedChanged: autoStart = checked }
-                Button { flat: true; text: "✕"; onClicked: rulesModel.remove(index) }
+                IconToolButton {
+                    icon: "close"
+                    iconSize: 18
+                    danger: true
+                    toolTip: qsTr("Remove rule")
+                    onClicked: rulesModel.remove(index)
+                }
             }
         }
-        Label { text: qsTr("Add rule"); font.weight: Font.DemiBold; color: Theme.text }
+
         RowLayout {
+            spacing: 8
+            MaterialIcon { icon: "add"; iconSize: 18; color: Theme.primary }
+            Label {
+                text: qsTr("Add rule")
+                font.pixelSize: Theme.typeTitleSmall
+                font.weight: Font.Medium
+                color: Theme.onSurface
+            }
+        }
+
+        RowLayout {
+            spacing: 8
             ComboBox { id: typeBox; model: ["local", "remote", "dynamic"]; Layout.preferredWidth: 92 }
             TextField { id: listenAddr; text: "127.0.0.1"; Layout.preferredWidth: 90 }
             TextField { id: listenPort; placeholderText: "5432"; Layout.preferredWidth: 70 }
-            Label { text: "→"; color: Theme.textMuted }
+            MaterialIcon { icon: "arrow_forward"; iconSize: 18; color: Theme.onSurfaceVariant }
             TextField { id: destHost; placeholderText: qsTr("dest host"); Layout.preferredWidth: 130 }
             TextField { id: destPort; placeholderText: qsTr("port"); Layout.preferredWidth: 70 }
-            Button { text: qsTr("Add"); highlighted: true; onClicked: {
-                rulesModel.append({ id: String(Date.now()), name: "", type: typeBox.currentText,
-                    listenAddress: listenAddr.text, listenPort: parseInt(listenPort.text || "0"),
-                    destHost: destHost.text, destPort: parseInt(destPort.text || "0"),
-                    autoStart: true, enabled: true });
-            } }
+            FlatButton {
+                text: qsTr("Add")
+                iconName: "add"
+                accent: true
+                onClicked: {
+                    rulesModel.append({ id: String(Date.now()), name: "", type: typeBox.currentText,
+                        listenAddress: listenAddr.text, listenPort: parseInt(listenPort.text || "0"),
+                        destHost: destHost.text, destPort: parseInt(destPort.text || "0"),
+                        autoStart: true, enabled: true });
+                }
+            }
         }
     }
     onClosed: {
