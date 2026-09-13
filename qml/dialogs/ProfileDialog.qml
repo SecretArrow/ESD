@@ -75,7 +75,7 @@ Dialog {
             Label { text: qsTr("Private key"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium; visible: authBoxIdx() === 1 }
             RowLayout { visible: authBoxIdx() === 1; Layout.fillWidth: true
                 TextField { id: keyField; text: dlg.draft ? dlg.draft.privateKeyPath : ""; onTextChanged: { if (dlg.draft) dlg.draft.privateKeyPath = text } Layout.fillWidth: true }
-                IconToolButton { icon: "folder_open"; iconSize: 18; toolTip: qsTr("Browse…"); onClicked: keyDialog.open() }
+                IconToolButton { iconName: "folder_open"; iconSize: 18; toolTip: qsTr("Browse…"); onClicked: keyDialog.open() }
             }
             Label { text: qsTr("Passphrase"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium; visible: authBoxIdx() === 1 }
             TextField { echoMode: TextInput.Password; Layout.fillWidth: true; visible: authBoxIdx() === 1

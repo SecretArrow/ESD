@@ -245,7 +245,7 @@ ApplicationWindow {
                     Label { text: "Eclipse SSH"; font.weight: Font.DemiBold; font.pixelSize: Theme.typeTitleMedium; color: Theme.onSurface }
                     Item { Layout.fillWidth: true }
                     IconToolButton {
-                        icon: "add"; toolTip: qsTr("New connection")
+                        iconName: "add"; toolTip: qsTr("New connection")
                         onClicked: profileDialog.openNew()
                     }
                 }
@@ -832,7 +832,7 @@ ApplicationWindow {
                         font.pixelSize: Theme.typeBodySmall; Layout.fillWidth: true; visible: text.length > 0 }
             }
             IconToolButton {
-                icon: "close"; iconSize: 16
+                iconName: "close"; iconSize: 16
                 onClicked: { toastTimer.stop(); toastLoader.opacity = 0; toastShift.y = 10; toastHideTimer.restart() }
             }
         }

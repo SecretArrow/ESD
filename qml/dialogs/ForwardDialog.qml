@@ -83,7 +83,7 @@ Dialog {
                 }
                 CheckBox { text: qsTr("auto"); checked: autoStart; onCheckedChanged: autoStart = checked }
                 IconToolButton {
-                    icon: "close"
+                    iconName: "close"
                     iconSize: 18
                     danger: true
                     toolTip: qsTr("Remove rule")

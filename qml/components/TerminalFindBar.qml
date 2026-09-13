@@ -107,7 +107,7 @@ Rectangle {
         }
 
         IconToolButton {
-            icon: "arrow_upward"
+            iconName: "arrow_upward"
             iconSize: 18
             enabled: bar.matchCount > 0
             toolTip: qsTr("Previous match (Shift+Enter)")
@@ -115,7 +115,7 @@ Rectangle {
         }
 
         IconToolButton {
-            icon: "arrow_downward"
+            iconName: "arrow_downward"
             iconSize: 18
             enabled: bar.matchCount > 0
             toolTip: qsTr("Next match (Enter)")
@@ -123,7 +123,7 @@ Rectangle {
         }
 
         IconToolButton {
-            icon: "close"
+            iconName: "close"
             iconSize: 18
             toolTip: qsTr("Close (Esc)")
             onClicked: bar.close()

@@ -65,18 +65,18 @@ Rectangle {
                     font.pixelSize: Theme.typeLabelSmall
                 }
                 IconToolButton {
-                    icon: state === 1 ? "pause" : "play_arrow"
+                    iconName: state === 1 ? "pause" : "play_arrow"
                     iconSize: 18
                     onClicked: state === 1 ? Transfers.pause(index) : Transfers.resume(index)
                 }
                 IconToolButton {
-                    icon: "close"
+                    iconName: "close"
                     iconSize: 18
                     danger: true
                     onClicked: Transfers.cancel(index)
                 }
                 IconToolButton {
-                    icon: "refresh"
+                    iconName: "refresh"
                     iconSize: 18
                     visible: state === 4 || state === 5
                     onClicked: Transfers.retry(index)

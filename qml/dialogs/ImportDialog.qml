@@ -131,7 +131,7 @@ Dialog {
                                               : qsTr("/path/to/known_hosts")
             }
             IconToolButton {
-                icon: "folder_open"
+                iconName: "folder_open"
                 iconSize: 18
                 toolTip: qsTr("Browse…")
                 onClicked: openFileDlg.open()

@@ -250,10 +250,10 @@ foreach(stylefile ${ECLIPSE_MD3_STYLE_FILES})
 endforeach()
 set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/resources/fonts/MaterialSymbolsRounded.ttf PROPERTIES
-    QT_RESOURCE_ALIAS "fonts/MaterialSymbolsRounded.ttf")
+    QT_RESOURCE_ALIAS "MaterialSymbolsRounded.ttf")
 set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/resources/fonts/MaterialSymbolsRounded-Fill.ttf PROPERTIES
-    QT_RESOURCE_ALIAS "fonts/MaterialSymbolsRounded-Fill.ttf")
+    QT_RESOURCE_ALIAS "MaterialSymbolsRounded-Fill.ttf")
 qt_add_resources(eclipse-ssh-desktop "md3style"
     PREFIX "/style/EclipseMD3"
     FILES ${ECLIPSE_MD3_STYLE_FILES})

@@ -23,7 +23,7 @@ Rectangle {
                 Layout.fillWidth: true
             }
             IconToolButton {
-                icon: "add"
+                iconName: "add"
                 toolTip: qsTr("Add snippet")
                 onClicked: snippetModel.addSnippet(groupField.text || "General", titleField.text, cmdField.text)
             }
@@ -48,7 +48,7 @@ Rectangle {
                 Label { text: title; color: Theme.onSurface; font.pixelSize: Theme.typeBodySmall; Layout.fillWidth: true; elide: Text.ElideRight }
                 IconToolButton {
                     id: sendButton
-                    icon: "play_arrow"
+                    iconName: "play_arrow"
                     toolTip: qsTr("Send to terminal")
                     onClicked: {
                         if (!panel.session) return;
@@ -64,8 +64,8 @@ Rectangle {
                     }
                     property var pendingSend: null
                 }
-                IconToolButton { icon: "edit"; toolTip: qsTr("Save command"); onClicked: snippetModel.updateSnippet(id, group, title, cmdField.text) }
-                IconToolButton { icon: "delete"; danger: true; toolTip: qsTr("Delete snippet"); onClicked: snippetModel.removeSnippet(id) }
+                IconToolButton { iconName: "edit"; toolTip: qsTr("Save command"); onClicked: snippetModel.updateSnippet(id, group, title, cmdField.text) }
+                IconToolButton { iconName: "delete"; danger: true; toolTip: qsTr("Delete snippet"); onClicked: snippetModel.removeSnippet(id) }
             }
         }
     }

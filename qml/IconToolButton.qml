@@ -11,7 +11,9 @@ import Eclipse
 ToolButton {
     id: control
 
-    property string icon: ""
+    // NOTE: named iconName because ToolButton.icon is a FINAL base property
+    // and cannot be shadowed by a derived QML type.
+    property string iconName: ""
     property int iconSize: 20
     property bool filled: false
     property bool danger: false
@@ -22,7 +24,7 @@ ToolButton {
     hoverEnabled: true
 
     contentItem: MaterialIcon {
-        icon: control.icon
+        icon: control.iconName
         iconSize: control.iconSize
         filled: control.filled
         color: !control.enabled

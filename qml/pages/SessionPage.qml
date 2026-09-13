@@ -451,7 +451,7 @@ Rectangle {
             anchors.right: parent.right
             anchors.rightMargin: 6
             anchors.verticalCenter: parent.verticalCenter
-            icon: "close"
+            iconName: "close"
             toolTip: qsTr("Dismiss")
             onClicked: if (terminalSplits.primaryTerm)
                            terminalSplits.primaryTerm.clearSixelThumbnails()
