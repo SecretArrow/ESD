@@ -579,10 +579,13 @@ Outcome LibsshChannel::openShell(int cols, int rows, const QStringList& env)
 Outcome LibsshChannel::openExecChannel(const QString& cmd)
 {
     if (sessionGone() || !m_channel) {
-        // Diagnostic: which condition tripped? (token state vs channel ptr)
-        return Outcome::fail(QStringLiteral("Channel unusable (sessionGone=%1, channelNull=%2, engineSessionNull=%3)")
-                                 .arg(sessionGone()).arg(!m_channel)
-                                 .arg(m_engine->rawSession() == nullptr));
+        // Diagnostic: which condition tripped + token identity (engine vs channel)
+        return Outcome::fail(QStringLiteral(
+                                 "Channel unusable (chGone=%1 chTokNull=%2 engGone=%3 engTok=0x%4 chTok=0x%5)")
+                                 .arg(sessionGone()).arg(!m_alive)
+                                 .arg(m_engine->sessionGone())
+                                 .arg(reinterpret_cast<quintptr>(m_engine->aliveToken().get()), 4, 16, QChar('0'))
+                                 .arg(reinterpret_cast<quintptr>(m_alive.get()), 4, 16, QChar('0')));
     }
     if (ssh_channel_request_exec(m_channel, cmd.toUtf8().constData()) != SSH_OK)
         return libsshError(m_engine->rawSession(), QStringLiteral("The command could not be executed."));
