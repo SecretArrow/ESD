@@ -55,17 +55,18 @@ jobs:
         run: |
           sudo apt-get install -y --no-install-recommends openssh-server openssh-client
           sudo mkdir -p /run/sshd
-          mkdir -p /tmp/ssh_rt
+          mkdir -p /tmp/ssh_rt ~/.ssh
           ssh-keygen -q -t ed25519 -N "" -f /tmp/ssh_rt/id_ed25519
           ssh-keygen -q -t ed25519 -N "" -f /tmp/ssh_rt/hostkey
-          cp /tmp/ssh_rt/id_ed25519.pub /tmp/ssh_rt/authorized_keys
-          chmod 600 /tmp/ssh_rt/authorized_keys /tmp/ssh_rt/id_ed25519
+          cp /tmp/ssh_rt/id_ed25519.pub ~/.ssh/authorized_keys
+          chmod 700 ~/.ssh
+          chmod 600 ~/.ssh/authorized_keys
           cat > /tmp/ssh_rt/sshd_config <<'EOF'
           Port 2222
           ListenAddress 127.0.0.1
           HostKey /tmp/ssh_rt/hostkey
           PidFile /tmp/ssh_rt/sshd.pid
-          AuthorizedKeysFile /tmp/ssh_rt/authorized_keys
+          AuthorizedKeysFile .ssh/authorized_keys
           PubkeyAuthentication yes
           PasswordAuthentication no
           KbdInteractiveAuthentication no
@@ -74,7 +75,7 @@ jobs:
           AllowUsers runner
           Subsystem sftp internal-sftp
           StrictModes yes
-          LogLevel INFO
+          LogLevel VERBOSE
           EOF
           sudo /usr/sbin/sshd -f /tmp/ssh_rt/sshd_config -E /tmp/ssh_rt/sshd.log
           timeout 15 bash -c 'until (exec 3<>/dev/tcp/127.0.0.1/2222) 2>/dev/null; do sleep 0.3; done'
@@ -86,6 +87,14 @@ jobs:
           ESD_SSHD_USER: runner
           ESD_SSHD_KEY: /tmp/ssh_rt/id_ed25519
         run: ctest --test-dir build/ci --output-on-failure
+
+      - name: Dump sshd log (round-trip diagnostics)
+        if: failure()
+        run: |
+          echo "--- sshd log ---"
+          sudo cat /tmp/ssh_rt/sshd.log 2>/dev/null || true
+          echo "--- key perms ---"
+          ls -la ~/.ssh/ /tmp/ssh_rt/ 2>/dev/null || true
 
       - name: Smoke test (offscreen)
         run: |
