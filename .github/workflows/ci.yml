@@ -55,6 +55,11 @@ jobs:
         run: |
           sudo apt-get install -y --no-install-recommends openssh-server openssh-client
           sudo mkdir -p /run/sshd
+          # GH runners ship the 'runner' account with a LOCKED password field.
+          # With UsePAM no, sshd denies pubkey auth to locked accounts
+          # ("User runner not allowed because account is locked"); '*' means
+          # "no password" without the lock flag.
+          sudo usermod -p '*' runner
           mkdir -p /tmp/ssh_rt ~/.ssh
           ssh-keygen -q -t ed25519 -N "" -f /tmp/ssh_rt/id_ed25519
           ssh-keygen -q -t ed25519 -N "" -f /tmp/ssh_rt/hostkey
