@@ -250,7 +250,9 @@ private:
             written += n;
         }
         sftp->closeFile(fh);
-        QCOMPARE(written, qint64(payload.size()));
+        QVERIFY2(written == qint64(payload.size()),
+                 qPrintable(QStringLiteral("SFTP upload stalled at %1/%2 bytes: %3")
+                                .arg(written).arg(payload.size()).arg(werr)));
 
         // stat
         SftpAttrs attrs;

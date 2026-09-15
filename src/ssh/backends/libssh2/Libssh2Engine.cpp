@@ -2260,7 +2260,27 @@ void Libssh2Engine::disconnect()
 
 std::unique_ptr<IChannel> Libssh2Engine::openChannel(QString* err)
 {
-    return openShellChannel(80, 24, {}, err); // default terminal size per spec
+    // ISshEngine contract: openChannel returns an UNSTARTED session channel;
+    // the caller selects the channel type via IChannel::openShell() or
+    // openExecChannel() (see SshWorker::runTerminal/runExec). Auto-starting a
+    // shell here made the follow-up openExecChannel fail with
+    // LIBSSH2_ERROR (-39 "channel can not be reused").
+    auto st = m_state;
+    std::lock_guard<std::recursive_mutex> lock(st->mutex);
+    if (!st->session || !st->connected) {
+        if (err)
+            *err = QStringLiteral("Not connected.");
+        return nullptr;
+    }
+    LIBSSH2_CHANNEL* chan = retryEagainPtr([&] {
+        return libssh2_channel_open_session(st->session);
+    }, nowMs() + st->opTimeoutMs, st->session);
+    if (!chan) {
+        if (err)
+            *err = libssh2ErrorText(st->session, libssh2_session_last_errno(st->session));
+        return nullptr;
+    }
+    return std::make_unique<Libssh2Channel>(m_state, chan, ChannelKind::Shell);
 }
 
 std::unique_ptr<IChannel> Libssh2Engine::openShellChannel(int cols, int rows,

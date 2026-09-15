@@ -891,7 +891,7 @@ QString LibsshSftp::readLink(const QString& path)
 LibsshSftp::FileHandle LibsshSftp::openForRead(const QString& path, quint64* sizeOut, QString* err)
 {
     std::lock_guard<std::recursive_mutex> lock(m_engine->mutex());
-    sftp_file f = sftp_open(m_sftp, path.toUtf8().constData(), O_RDONLY, 0);
+    sftp_file f = sftp_open(m_sftp, path.toUtf8().constData(), SSH_FXF_READ, 0);
     if (!f) {
         if (err)
             *err = QString::fromLatin1(ssh_get_error(m_engine->rawSession()));
@@ -909,7 +909,11 @@ LibsshSftp::FileHandle LibsshSftp::openForRead(const QString& path, quint64* siz
 LibsshSftp::FileHandle LibsshSftp::openForWrite(const QString& path, quint64, bool append, quint32 mode, QString* err)
 {
     std::lock_guard<std::recursive_mutex> lock(m_engine->mutex());
-    const int flags = append ? (O_WRONLY | O_CREAT | O_APPEND) : (O_WRONLY | O_CREAT | O_TRUNC);
+    // SFTP open flags are the wire-level SSH_FXF_* values, NOT POSIX O_*:
+    // O_WRONLY|O_CREAT|O_TRUNC == 0x241 which the server decodes as
+    // SSH_FXF_READ only (read-only handle) - every upload silently failed.
+    const int flags = append ? (SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_APPEND)
+                             : (SSH_FXF_WRITE | SSH_FXF_CREAT | SSH_FXF_TRUNC);
     sftp_file f = sftp_open(m_sftp, path.toUtf8().constData(), flags, mode);
     if (!f) {
         if (err)
@@ -962,7 +966,7 @@ void LibsshSftp::closeFile(FileHandle h)
 bool LibsshSftp::truncate(const QString& path, QString* err)
 {
     std::lock_guard<std::recursive_mutex> lock(m_engine->mutex());
-    sftp_file f = sftp_open(m_sftp, path.toUtf8().constData(), O_WRONLY | O_TRUNC, 0);
+    sftp_file f = sftp_open(m_sftp, path.toUtf8().constData(), SSH_FXF_WRITE | SSH_FXF_TRUNC, 0);
     if (!f) {
         if (err)
             *err = QString::fromLatin1(ssh_get_error(m_engine->rawSession()));
