@@ -161,10 +161,13 @@ jobs:
           [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ] || [ "$RC" -eq 137 ]
           if grep -qi "is not installed" /tmp/smoke.log; then echo "QML MODULE MISSING IN DIST"; exit 1; fi
           # QML health gate: zero runtime binding/reference errors allowed to ship
+          # (NOTE: the Windows offscreen smoke produces NO stdout/stderr at all -
+          #  pre-existing GUI-subsystem behaviour - so error greps here pass
+          #  vacuously on Windows; the positive style assertion lives in the
+          #  real-desktop smoke below where output is proven to flow.)
           if grep -nE "ReferenceError|is not defined|is not installed|Unable to assign|TypeError:|Style names must not contain paths|failed to load icon font|Cannot override FINAL" /tmp/smoke.log; then
             echo "FATAL: QML runtime errors in smoke log"; exit 1
           fi
-           grep -q "Quick Controls style (post-load): EclipseMD3" /tmp/smoke.log || { echo "FATAL: EclipseMD3 style not active"; exit 1; }
 
       - name: Zip portable
         shell: msys2 {0}
@@ -195,7 +198,7 @@ jobs:
           if grep -nE "ReferenceError|is not defined|is not installed|Unable to assign|TypeError:|Style names must not contain paths|failed to load icon font|Cannot override FINAL" /tmp/smoke-win.log; then
             echo "FATAL: QML runtime errors in smoke log"; exit 1
           fi
-           grep -q "Quick Controls style (post-load): EclipseMD3" /tmp/smoke-win.log || { echo "FATAL: EclipseMD3 style not active"; exit 1; }
+          grep -q "Quick Controls style (post-load): EclipseMD3" /tmp/smoke-win.log || { echo "FATAL: EclipseMD3 style not active"; exit 1; }
           test -f ./dist/win64/qt.conf || { echo "qt.conf missing from dist"; exit 1; }
 
       - name: Single instance (2nd exits 0 and pokes 1st; 1st stays alive)
