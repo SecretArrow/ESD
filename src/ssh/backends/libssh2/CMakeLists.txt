@@ -18,6 +18,7 @@ target_link_libraries(eclipse_ssh2backend
         Qt6::Network
         PkgConfig::LIBSSH2
         eclipse_core
+        eclipse_sshagent
 )
 
 eclipse_set_target_warnings(eclipse_ssh2backend)

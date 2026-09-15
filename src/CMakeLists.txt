@@ -63,11 +63,26 @@ endif()
 eclipse_set_target_warnings(eclipse_core)
 
 # ---------------------------------------------------------------------------
+# eclipse_sshagent: SSH agent protocol client + wire helpers.
+# Shared by both SSH backends (libssh and libssh2 agent flows), so it lives
+# BELOW the backend targets and must not depend on them.
+# ---------------------------------------------------------------------------
+add_library(eclipse_sshagent STATIC
+    ssh/AgentClient.cpp
+)
+target_include_directories(eclipse_sshagent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(eclipse_sshagent
+    PUBLIC
+        Qt6::Network
+    PRIVATE
+        eclipse_core
+)
+
+# ---------------------------------------------------------------------------
 # eclipse_ssh: engine abstraction, libssh backend, host key mgmt, agent
 # ---------------------------------------------------------------------------
 add_library(eclipse_ssh STATIC
     ssh/HostKeyManager.cpp
-    ssh/AgentClient.cpp
     ssh/ProxyDialer.cpp
     ssh/Bridge.cpp
     ssh/SshWorker.cpp
@@ -80,6 +95,10 @@ add_library(eclipse_ssh STATIC
 )
 
 target_include_directories(eclipse_ssh PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Agent client + wire helpers live in eclipse_sshagent (shared with the
+# libssh2 backend so both engines can drive ssh-agent).
+target_link_libraries(eclipse_ssh PUBLIC eclipse_sshagent)
 
 # libssh2 backend: linked INTO eclipse_ssh so the EngineFactory can dispatch
 # SshEngineKind::Libssh2 to the real backend (previously dead code - the app
