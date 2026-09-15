@@ -205,7 +205,8 @@ private:
         QVERIFY2(hostKey.sha256Fingerprint.startsWith(QLatin1String("SHA256:")),
                  qPrintable(hostKey.sha256Fingerprint));
         QVERIFY(engine->isConnected());
-        QVERIFY2(!engine->serverBanner().isEmpty(), "server banner must be captured");
+        // NOTE: no serverBanner() assertion - the issue banner is optional;
+        // a default sshd (Banner none) legitimately sends none.
 
         // --- authenticate (public key) --------------------------------------
         Outcome auth = engine->authenticate(keyAuth());
