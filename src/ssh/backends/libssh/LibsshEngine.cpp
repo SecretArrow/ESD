@@ -268,6 +268,37 @@ Outcome LibsshEngine::authenticate(const AuthParams& params,
         return authenticateWithAgent(params.username);
     case SshAuthMethod::PublicKey: {
         const QByteArray pass = params.passphrase.toUtf8();
+        // Explicit key: import and authenticate directly. ssh_userauth_publickey_auto()
+        // ignores the profile semantics (it always probes the agent and default
+        // identities and can fail without ever offering our key to the server).
+        if (!params.privateKeyPath.isEmpty()) {
+            const QByteArray keyPath = params.privateKeyPath.toUtf8();
+            ssh_key priv = nullptr;
+            const int irc = ssh_pki_import_privkey_file(
+                keyPath.constData(),
+                params.passphrase.isEmpty() ? nullptr : pass.constData(),
+                nullptr, nullptr, &priv);
+            if (irc != SSH_OK || !priv) {
+                return Outcome::fail(
+                    QStringLiteral("Could not read the private key file."),
+                    QStringLiteral("ssh_pki_import_privkey_file rc=%1 (%2)")
+                        .arg(irc).arg(QString::fromLatin1(ssh_get_error(m_session))),
+                    QStringLiteral("Check the file path, key format and passphrase."));
+            }
+            const int rc = ssh_userauth_publickey(m_session, userC, priv);
+            ssh_key_free(priv);
+            if (rc == SSH_AUTH_SUCCESS)
+                return Outcome::success();
+            if (rc == SSH_AUTH_PARTIAL)
+                return Outcome::fail(QStringLiteral("Partial authentication: more credentials required."));
+            if (!(params.tryDefaultIdentities || params.allowAgentFallback)) {
+                return Outcome::fail(
+                    QStringLiteral("The server rejected this key."),
+                    QStringLiteral("SSH_AUTH_DENIED"),
+                    QStringLiteral("Add the matching public key to the server's authorized_keys."));
+            }
+            // fall through to auto() for the agent / default identities
+        }
         const int rc = ssh_userauth_publickey_auto(m_session, userC,
                                                    params.passphrase.isEmpty() ? nullptr : pass.constData());
         if (rc == SSH_AUTH_SUCCESS)
@@ -1085,22 +1116,7 @@ Outcome LibsshScp::recvFrom(const QString& remotePath, const QString& localPath,
     return result;
 }
 
-// ---------------------------------------------------------------------------
-// Factory
-// ---------------------------------------------------------------------------
-std::unique_ptr<ISshEngine> createEngine(SshEngineKind kind)
-{
-    return std::make_unique<LibsshEngine>();
-}
-
-QString libsshVersionString()
-{
-    return QString::fromLatin1(ssh_version(0));
-}
-
-QString libssh2VersionString()
-{
-    return {}; // provided by the libssh2 backend target when compiled in
-}
+// createEngine()/libsshVersionString()/libssh2VersionString() moved to
+// src/ssh/EngineFactory.cpp which dispatches across all linked backends.
 
 } // namespace eclipse

@@ -2,6 +2,14 @@
 # Built up in stages: core -> ssh -> transfer -> terminal -> app (QML UI)
 
 # ---------------------------------------------------------------------------
+# ssh backends (each defines its own static library target)
+# Defined EARLY so eclipse_ssh can link the libssh2 backend directly.
+# ---------------------------------------------------------------------------
+if(ECLIPSE_WITH_LIBSSH2)
+    add_subdirectory(ssh/backends/libssh2)
+endif()
+
+# ---------------------------------------------------------------------------
 # common (header-only-ish helpers)
 # ---------------------------------------------------------------------------
 
@@ -67,10 +75,20 @@ add_library(eclipse_ssh STATIC
     ssh/ForwardManager.cpp
     ssh/JumpConnector.cpp
     ssh/Diagnostics.cpp
+    ssh/EngineFactory.cpp
     ssh/backends/libssh/LibsshEngine.cpp
 )
 
 target_include_directories(eclipse_ssh PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+# libssh2 backend: linked INTO eclipse_ssh so the EngineFactory can dispatch
+# SshEngineKind::Libssh2 to the real backend (previously dead code - the app
+# silently used libssh regardless of the profile's engine choice).
+if(TARGET eclipse_ssh2backend)
+    target_link_libraries(eclipse_ssh PUBLIC eclipse_ssh2backend)
+    target_compile_definitions(eclipse_ssh PUBLIC ECLIPSE_HAVE_LIBSSH2)
+endif()
+
 target_link_libraries(eclipse_ssh
     PUBLIC
         eclipse_core
@@ -284,10 +302,3 @@ if(WIN32)
         "${CMAKE_BINARY_DIR}/generated/app.rc")
 endif()
 eclipse_set_target_warnings(eclipse-ssh-desktop)
-
-# ---------------------------------------------------------------------------
-# ssh backends (each defines its own static library target)
-# ---------------------------------------------------------------------------
-if(ECLIPSE_WITH_LIBSSH2)
-    add_subdirectory(ssh/backends/libssh2)
-endif()
