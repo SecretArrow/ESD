@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 
@@ -65,6 +66,13 @@ public:
     std::recursive_mutex& rawMutex() override { return m_mutex; }
     ssh_session_struct* rawSession() const { return m_session; }
 
+    // True once the libssh session memory has been invalidated (disconnect /
+    // destruction). Children (channels, sftp, scp) MUST NOT touch session-owned
+    // handles afterwards - sftp_free/channel_free after ssh_disconnect is a
+    // guaranteed use-after-free.
+    bool sessionGone() const { return !m_sessionAlive->load(std::memory_order_acquire); }
+    std::shared_ptr<std::atomic<bool>> aliveToken() const { return m_sessionAlive; }
+
     // Called by LibsshChannel after a successful x11-req on a shell channel;
     // starts the local-display accept/bridge loop for forwarded X11 channels.
     void registerX11Channel(ssh_channel_struct* shellChannel);
@@ -74,6 +82,7 @@ private:
                           const std::function<void(const HostKeyInfo&)>& hostKeyCb);
 
     ssh_session_struct* m_session = nullptr;
+    std::shared_ptr<std::atomic<bool>> m_sessionAlive = std::make_shared<std::atomic<bool>>(false);
     QString m_identityPath;
     QString m_knownHostsPath;
     QString m_kexPreference;
@@ -107,8 +116,11 @@ private:
     friend class LibsshEngine;
 
     LibsshEngine* m_engine = nullptr;
+    std::shared_ptr<std::atomic<bool>> m_alive;
     ssh_channel_struct* m_channel = nullptr;
     bool m_closed = false;
+
+    bool sessionGone() const { return !m_alive || m_alive->load(std::memory_order_acquire); }
 };
 
 class LibsshSftp : public ISftpSession
@@ -141,7 +153,10 @@ public:
 
 private:
     LibsshEngine* m_engine = nullptr;
+    std::shared_ptr<std::atomic<bool>> m_alive;
     sftp_session_struct* m_sftp = nullptr;
+
+    bool sessionGone() const { return !m_alive || m_alive->load(std::memory_order_acquire); }
 };
 
 class LibsshScp : public IScpSession
@@ -155,6 +170,9 @@ public:
 
 private:
     LibsshEngine* m_engine = nullptr;
+    std::shared_ptr<std::atomic<bool>> m_alive;
+
+    bool sessionGone() const { return !m_alive || m_alive->load(std::memory_order_acquire); }
 };
 
 } // namespace eclipse

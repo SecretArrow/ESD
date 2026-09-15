@@ -84,6 +84,8 @@ void fillSftpAttrs(const sftp_attributes_struct* a, SftpAttrs* out)
 LibsshEngine::LibsshEngine()
 {
     m_session = ssh_new();
+    if (m_session)
+        m_sessionAlive->store(true, std::memory_order_release);
 }
 
 LibsshEngine::~LibsshEngine()
@@ -209,6 +211,7 @@ Outcome LibsshEngine::finishConnect(const QString& hostForLog, int port,
             hostKeyCb(info);
     }
     LOG_SSH(QStringLiteral("[libssh] handshake done, host key %1").arg(m_lastHostKey.sha256Fingerprint));
+    m_sessionAlive->store(true, std::memory_order_release); // re-arm on (re)connect
     return Outcome::success();
 }
 
@@ -367,6 +370,10 @@ bool LibsshEngine::isConnected() const
 void LibsshEngine::disconnect()
 {
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    // Mark the session dead BEFORE invalidating the memory: children (sftp
+    // handles, channels) may outlive this call and their destructors check
+    // the token to avoid use-after-free inside sftp_free/ssh_channel_free.
+    m_sessionAlive->store(false, std::memory_order_release);
     if (m_session && ssh_is_connected(m_session))
         ssh_disconnect(m_session);
     if (m_ownedFd >= 0) {
@@ -542,6 +549,7 @@ EngineInfo LibsshEngine::negotiatedInfo() const
 // ---------------------------------------------------------------------------
 LibsshChannel::LibsshChannel(LibsshEngine* engine, ssh_channel_struct* channel)
     : m_engine(engine)
+    , m_alive(engine->aliveToken())
     , m_channel(channel)
 {
 }
@@ -553,6 +561,8 @@ LibsshChannel::~LibsshChannel()
 
 Outcome LibsshChannel::openShell(int cols, int rows, const QStringList& env)
 {
+    if (sessionGone() || !m_channel)
+        return Outcome::fail(QStringLiteral("The session has been disconnected."));
     if (ssh_channel_request_pty_size(m_channel, "xterm-256color", cols, rows) != SSH_OK)
         return libsshError(m_engine->rawSession(), QStringLiteral("PTY request was rejected by the server."));
     for (const QString& kv : env) {
@@ -568,6 +578,8 @@ Outcome LibsshChannel::openShell(int cols, int rows, const QStringList& env)
 
 Outcome LibsshChannel::openExecChannel(const QString& cmd)
 {
+    if (sessionGone() || !m_channel)
+        return Outcome::fail(QStringLiteral("The session has been disconnected."));
     if (ssh_channel_request_exec(m_channel, cmd.toUtf8().constData()) != SSH_OK)
         return libsshError(m_engine->rawSession(), QStringLiteral("The command could not be executed."));
     return Outcome::success();
@@ -575,7 +587,7 @@ Outcome LibsshChannel::openExecChannel(const QString& cmd)
 
 Outcome LibsshChannel::requestX11(int screenNumber, const QString& authCookie, QString* err)
 {
-    if (!m_channel || !m_engine) {
+    if (!m_channel || !m_engine || sessionGone()) {
         if (err)
             *err = QStringLiteral("Channel is not open.");
         return Outcome::fail(QStringLiteral("Channel is not open."));
@@ -599,12 +611,12 @@ Outcome LibsshChannel::requestX11(int screenNumber, const QString& authCookie, Q
 
 bool LibsshChannel::isOpen() const
 {
-    return m_channel && !m_closed && ssh_channel_is_closed(m_channel) == 0;
+    return !sessionGone() && m_channel && !m_closed && ssh_channel_is_closed(m_channel) == 0;
 }
 
 bool LibsshChannel::isEof() const
 {
-    return m_channel ? ssh_channel_is_eof(m_channel) != 0 : true;
+    return sessionGone() || !m_channel ? true : ssh_channel_is_eof(m_channel) != 0;
 }
 
 int LibsshChannel::readStdout(char* buf, int len)
@@ -659,8 +671,13 @@ void LibsshChannel::sendEof()
 void LibsshChannel::close()
 {
     if (m_channel && !m_closed) {
-        ssh_channel_close(m_channel);
-        ssh_channel_free(m_channel);
+        // After disconnect/ssh_disconnect the channel memory is already gone;
+        // touching it here is a guaranteed use-after-free (observed as a
+        // SIGSEGV inside libssh when a channel outlived its session).
+        if (!sessionGone()) {
+            ssh_channel_close(m_channel);
+            ssh_channel_free(m_channel);
+        }
         m_closed = true;
     }
     m_channel = nullptr;
@@ -668,7 +685,7 @@ void LibsshChannel::close()
 
 int LibsshChannel::exitStatus()
 {
-    return m_channel ? ssh_channel_get_exit_status(m_channel) : -1;
+    return sessionGone() || !m_channel ? -1 : ssh_channel_get_exit_status(m_channel);
 }
 
 // ---------------------------------------------------------------------------
@@ -676,6 +693,7 @@ int LibsshChannel::exitStatus()
 // ---------------------------------------------------------------------------
 LibsshSftp::LibsshSftp(LibsshEngine* engine)
     : m_engine(engine)
+    , m_alive(engine->aliveToken())
 {
     if (!m_engine->rawSession())
         return;
@@ -690,8 +708,12 @@ LibsshSftp::LibsshSftp(LibsshEngine* engine)
 LibsshSftp::~LibsshSftp()
 {
     std::lock_guard<std::recursive_mutex> lock(m_engine->mutex());
-    if (m_sftp)
+    // After disconnect the sftp channel is already freed with the session;
+    // sftp_free would dereference it (observed SIGSEGV in ssh_channel_send_eof
+    // called from sftp_free when the handle outlived the session).
+    if (m_sftp && !sessionGone())
         sftp_free(m_sftp);
+    m_sftp = nullptr;
 }
 
 bool LibsshSftp::isValid() const
@@ -702,6 +724,8 @@ bool LibsshSftp::isValid() const
 QString LibsshSftp::canonicalize(const QString& path)
 {
     std::lock_guard<std::recursive_mutex> lock(m_engine->mutex());
+    if (sessionGone() || !m_sftp)
+        return path;
     char* real = sftp_canonicalize_path(m_sftp, path.toUtf8().constData());
     QString out = real ? QString::fromUtf8(real) : path;
     if (real)
@@ -713,6 +737,11 @@ QVector<SftpEntry> LibsshSftp::listDir(const QString& path, QString* err)
 {
     QVector<SftpEntry> out;
     std::lock_guard<std::recursive_mutex> lock(m_engine->mutex());
+    if (sessionGone() || !m_sftp) {
+        if (err)
+            *err = QStringLiteral("The session has been disconnected.");
+        return out;
+    }
     sftp_dir dir = sftp_opendir(m_sftp, path.toUtf8().constData());
     if (!dir) {
         if (err)
@@ -891,6 +920,13 @@ QString LibsshSftp::readLink(const QString& path)
 LibsshSftp::FileHandle LibsshSftp::openForRead(const QString& path, quint64* sizeOut, QString* err)
 {
     std::lock_guard<std::recursive_mutex> lock(m_engine->mutex());
+    if (sizeOut)
+        *sizeOut = 0;
+    if (sessionGone() || !m_sftp) {
+        if (err)
+            *err = QStringLiteral("The session has been disconnected.");
+        return nullptr;
+    }
     sftp_file f = sftp_open(m_sftp, path.toUtf8().constData(), O_RDONLY, 0);
     if (!f) {
         if (err)
@@ -909,6 +945,11 @@ LibsshSftp::FileHandle LibsshSftp::openForRead(const QString& path, quint64* siz
 LibsshSftp::FileHandle LibsshSftp::openForWrite(const QString& path, quint64, bool append, quint32 mode, QString* err)
 {
     std::lock_guard<std::recursive_mutex> lock(m_engine->mutex());
+    if (sessionGone() || !m_sftp) {
+        if (err)
+            *err = QStringLiteral("The session has been disconnected.");
+        return nullptr;
+    }
     // NOTE: libssh's sftp_open takes POSIX O_* flags and translates them to
     // the wire SSH_FXF_* values itself (see libssh sftp.h documentation).
     const int flags = append ? (O_WRONLY | O_CREAT | O_APPEND) : (O_WRONLY | O_CREAT | O_TRUNC);
@@ -924,6 +965,11 @@ LibsshSftp::FileHandle LibsshSftp::openForWrite(const QString& path, quint64, bo
 int LibsshSftp::readFile(FileHandle h, char* buf, int len, QString* err)
 {
     std::lock_guard<std::recursive_mutex> lock(m_engine->mutex());
+    if (sessionGone()) {
+        if (err)
+            *err = QStringLiteral("The session has been disconnected.");
+        return -1;
+    }
     const int rc = sftp_read(reinterpret_cast<sftp_file>(h), buf, size_t(len));
     if (rc < 0 && err)
         *err = QString::fromLatin1(ssh_get_error(m_engine->rawSession()));
@@ -933,6 +979,11 @@ int LibsshSftp::readFile(FileHandle h, char* buf, int len, QString* err)
 int LibsshSftp::writeFile(FileHandle h, const char* buf, int len, QString* err)
 {
     std::lock_guard<std::recursive_mutex> lock(m_engine->mutex());
+    if (sessionGone()) {
+        if (err)
+            *err = QStringLiteral("The session has been disconnected.");
+        return -1;
+    }
     // Chunked: very large single sftp_write calls stall the remote window on
     // some servers; 32 KiB matches the SFTP packet size libssh negotiates.
     constexpr int kChunk = 32768;
@@ -964,6 +1015,8 @@ void LibsshSftp::closeFile(FileHandle h)
     if (!h)
         return;
     std::lock_guard<std::recursive_mutex> lock(m_engine->mutex());
+    if (sessionGone())
+        return; // handle memory went away with the session
     sftp_close(reinterpret_cast<sftp_file>(h));
 }
 
@@ -985,6 +1038,7 @@ bool LibsshSftp::truncate(const QString& path, QString* err)
 // ---------------------------------------------------------------------------
 LibsshScp::LibsshScp(LibsshEngine* engine)
     : m_engine(engine)
+    , m_alive(engine->aliveToken())
 {
 }
 
