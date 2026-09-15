@@ -1,3 +1,9 @@
+module EclipseMD3
+# EclipseMD3 Quick Controls style - embedded at the import-path location
+# (:/qt-project.org/imports/QtQuick/Controls/EclipseMD3) so Qt resolves it
+# as a built-in style. The module declaration makes the directory importable
+# as "EclipseMD3" (engine imports the active style module by bare name).
+
 ApplicationWindow 1.0 ApplicationWindow.qml
 Button 1.0 Button.qml
 CheckBox 1.0 CheckBox.qml
