@@ -16,7 +16,6 @@ T.Menu {
     rightPadding: 8
     margins: 8
     overlap: 4
-    hoverEnabled: true
 
     background: Rectangle {
         radius: 12
