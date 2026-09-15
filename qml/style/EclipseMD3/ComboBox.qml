@@ -36,7 +36,6 @@ T.ComboBox {
             font: control.font
             color: comboDelegate.enabled ? ThemeBridge.onSurface : Qt.alpha(ThemeBridge.onSurface, 0.38)
             alignment: Qt.AlignLeft | Qt.AlignVCenter
-            elide: Text.ElideRight
         }
 
         background: Rectangle {

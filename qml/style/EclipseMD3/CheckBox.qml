@@ -52,7 +52,7 @@ T.CheckBox {
         text: control.text
         font: control.font
         color: control.enabled ? ThemeBridge.onSurface : Qt.alpha(ThemeBridge.onSurface, 0.38)
-        verticalAlignment: Text.AlignVCenter
+        alignment: Qt.AlignLeft | Qt.AlignVCenter
         display: control.display
     }
 }

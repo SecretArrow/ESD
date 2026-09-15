@@ -54,7 +54,6 @@ T.MenuItem {
         spacing: control.spacing
         display: control.display
         alignment: Qt.AlignLeft | Qt.AlignVCenter
-        elide: Text.ElideRight
     }
 
     background: Rectangle {
