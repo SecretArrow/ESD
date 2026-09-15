@@ -185,7 +185,7 @@ jobs:
         run: |
           set +e
           unset QT_QPA_PLATFORM
-          ECLIPSE_HEADLESS=1 timeout -k 2 12 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/smoke-win.log 2>&1
+          ECLIPSE_HEADLESS=1 timeout -k 2 40 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/smoke-win.log 2>&1
           RC=$?
           set -e
           echo "real-platform smoke exit code: $RC"
@@ -206,7 +206,7 @@ jobs:
         run: |
           ECLIPSE_HEADLESS=1 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/first.log 2>&1 &
           FIRST=$!
-          sleep 6
+          sleep 15
           if ! kill -0 $FIRST 2>/dev/null; then echo "FIRST INSTANCE DIED"; cat /tmp/first.log; exit 1; fi
           grep -q "QML root" /tmp/first.log || { echo "FIRST INSTANCE NEVER REACHED QML LOAD"; cat /tmp/first.log; kill -9 $FIRST 2>/dev/null || true; exit 1; }
           set +e

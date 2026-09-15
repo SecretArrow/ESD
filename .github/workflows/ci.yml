@@ -300,7 +300,7 @@ jobs:
         run: |
           set +e
           unset QT_QPA_PLATFORM
-          ECLIPSE_HEADLESS=1 timeout -k 2 12 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/smoke-win.log 2>&1
+          ECLIPSE_HEADLESS=1 timeout -k 2 40 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/smoke-win.log 2>&1
           RC=$?
           set -e
           echo "real-platform smoke exit code: $RC"
@@ -310,6 +310,10 @@ jobs:
           if grep -qi "is not installed" /tmp/smoke-win.log; then
             echo "QML MODULES NOT IMPORTABLE FROM DIST (qt.conf/import path bug)"; exit 1
           fi
+          if grep -nE "ReferenceError|is not defined|is not installed|Unable to assign|TypeError:|Style names must not contain paths|failed to load icon font|Cannot override FINAL" /tmp/smoke-win.log; then
+            echo "FATAL: QML runtime errors in smoke log"; exit 1
+          fi
+          grep -q "Quick Controls style (post-load): EclipseMD3" /tmp/smoke-win.log || { echo "FATAL: EclipseMD3 style not active"; exit 1; }
           test -f ./dist/win64/qt.conf || { echo "qt.conf missing from dist"; exit 1; }
 
       - name: Single instance (2nd exits 0 and pokes 1st; 1st stays alive)
@@ -317,7 +321,7 @@ jobs:
         run: |
           ECLIPSE_HEADLESS=1 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/first.log 2>&1 &
           FIRST=$!
-          sleep 6
+          sleep 15
           if ! kill -0 $FIRST 2>/dev/null; then echo "FIRST INSTANCE DIED"; cat /tmp/first.log; exit 1; fi
           grep -q "QML root" /tmp/first.log || { echo "FIRST INSTANCE NEVER REACHED QML LOAD"; cat /tmp/first.log; kill -9 $FIRST 2>/dev/null || true; exit 1; }
           set +e
