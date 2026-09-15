@@ -30,7 +30,17 @@
 
 #include <QRandomGenerator>
 
+#include <cstdio>
+
 using namespace eclipse;
+
+// Bulletproof step markers: qInfo can be swallowed by Qt logging rules and
+// dies with the process on SIGSEGV; raw stderr + fflush always lands in ctest.
+static void rtStep(const char* what)
+{
+    std::fprintf(stderr, "[rt] %s\n", what);
+    std::fflush(stderr);
+}
 
 namespace {
 
@@ -217,27 +227,27 @@ private:
         QVERIFY2(!info.kex.isEmpty(), "kex must be negotiated");
 
         // --- exec channel ----------------------------------------------------
-        qInfo() << "RT: opening exec channel";
+        rtStep("opening exec channel");
         QString err;
         auto ch = engine->openChannel(&err);
         QVERIFY2(ch != nullptr, qPrintable(err));
         Outcome eo = ch->openExecChannel(QStringLiteral("printf 'eclipse-rt-%s\\n' OK"));
         QVERIFY2(eo.ok, qPrintable(eo.friendly));
-        qInfo() << "RT: pumping exec output";
+        rtStep("pumping exec output");
         QByteArray out = pumpStdout(ch.get(), 15000);
         QVERIFY2(out.contains("eclipse-rt-OK"),
                  qPrintable(QStringLiteral("exec output mismatch: %1").arg(QString::fromUtf8(out))));
         QVERIFY2(waitExitStatus(ch.get(), 10000) == 0, "exec exit status must be 0");
-        qInfo() << "RT: exec OK";
+        rtStep("exec OK");
 
         // --- SFTP round trip --------------------------------------------------
-        qInfo() << "RT: opening sftp";
+        rtStep("opening sftp");
         auto sftp = engine->openSftp(&err);
         QVERIFY2(sftp != nullptr && sftp->isValid(), qPrintable(err));
 
         QString root = sftp->canonicalize(QStringLiteral("."));
         QVERIFY2(root.startsWith(QLatin1String("/")), qPrintable(root));
-        qInfo() << "RT: sftp cwd =" << root;
+        rtStep("sftp canonicalize OK");
 
         const QByteArray payload = randomPayload(256 * 1024);
         const QString remoteFile = QStringLiteral("eclipse_rt_payload.bin");
@@ -246,7 +256,7 @@ private:
         QString werr;
         auto* fh = sftp->openForWrite(remoteFile, payload.size(), false, 0644, &werr);
         QVERIFY2(fh != nullptr, qPrintable(werr));
-        qInfo() << "RT: writing payload in chunks";
+        rtStep("writing payload in chunks");
         qint64 written = 0;
         while (written < payload.size()) {
             int n = sftp->writeFile(fh, payload.constData() + written,
@@ -256,7 +266,7 @@ private:
             written += n;
         }
         sftp->closeFile(fh);
-        qInfo() << "RT: wrote" << written << "bytes";
+        rtStep("write loop finished");
         QVERIFY2(written == qint64(payload.size()),
                  qPrintable(QStringLiteral("SFTP upload stalled at %1/%2 bytes: %3")
                                 .arg(written).arg(payload.size()).arg(werr)));
@@ -267,7 +277,7 @@ private:
         QCOMPARE(qint64(attrs.size), qint64(payload.size()));
 
         // read back and compare
-        qInfo() << "RT: reading back";
+        rtStep("reading back");
         QString rerr;
         auto* rh = sftp->openForRead(remoteFile, &remoteSize, &rerr);
         QVERIFY2(rh != nullptr, qPrintable(rerr));
@@ -306,7 +316,7 @@ private:
         QVERIFY2(sftp->rmdir(QStringLiteral("eclipse_rt_dir"), &aerr), qPrintable(aerr));
 
         // --- keepalive + disconnect ------------------------------------------
-        qInfo() << "RT: sftp housekeeping done, keepalive + disconnect";
+        rtStep("sftp housekeeping done, keepalive + disconnect");
         engine->sendKeepAlive();
         engine->disconnect();
         QVERIFY2(!engine->isConnected(), "isConnected must be false after disconnect");

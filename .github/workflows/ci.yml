@@ -93,6 +93,14 @@ jobs:
           ESD_SSHD_KEY: /tmp/ssh_rt/id_ed25519
         run: ctest --test-dir build/ci --output-on-failure
 
+      - name: Debug round-trip crash (gdb backtrace)
+        if: failure()
+        run: |
+          sudo apt-get install -y --no-install-recommends gdb
+          ESD_SSHD_PORT=2222 ESD_SSHD_USER=runner ESD_SSHD_KEY=/tmp/ssh_rt/id_ed25519 \
+            gdb -batch -ex "handle SIGSEGV stop print nopass" -ex run -ex bt -ex "info threads" \
+            --args ./build/ci/tests/test_ssh_roundtrip 2>&1 | tail -70 || true
+
       - name: Dump sshd log (round-trip diagnostics)
         if: failure()
         run: |
