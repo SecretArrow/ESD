@@ -578,8 +578,12 @@ Outcome LibsshChannel::openShell(int cols, int rows, const QStringList& env)
 
 Outcome LibsshChannel::openExecChannel(const QString& cmd)
 {
-    if (sessionGone() || !m_channel)
-        return Outcome::fail(QStringLiteral("The session has been disconnected."));
+    if (sessionGone() || !m_channel) {
+        // Diagnostic: which condition tripped? (token state vs channel ptr)
+        return Outcome::fail(QStringLiteral("Channel unusable (sessionGone=%1, channelNull=%2, engineSessionNull=%3)")
+                                 .arg(sessionGone()).arg(!m_channel)
+                                 .arg(m_engine->rawSession() == nullptr));
+    }
     if (ssh_channel_request_exec(m_channel, cmd.toUtf8().constData()) != SSH_OK)
         return libsshError(m_engine->rawSession(), QStringLiteral("The command could not be executed."));
     return Outcome::success();
