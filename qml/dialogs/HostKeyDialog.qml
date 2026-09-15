@@ -69,7 +69,7 @@ Dialog {
                 MaterialIcon { icon: "key"; iconSize: 16; color: Theme.onSurfaceVariant }
                 Label { text: qsTr("Key type"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall }
             }
-            Label { text: keyInfo.keyType; color: Theme.onSurface; font.family: "monospace"; font.pixelSize: Theme.typeBodySmall }
+            Label { text: keyInfo.keyType ? String(keyInfo.keyType) : ""; color: Theme.onSurface; font.family: "monospace"; font.pixelSize: Theme.typeBodySmall }
 
             RowLayout {
                 spacing: 6

@@ -29,8 +29,8 @@ T.Switch {
                 if (control.hovered) return Qt.lighter(ThemeBridge.primary, 1.08);
                 return ThemeBridge.primary;
             }
-            return Qt.alpha(ThemeBridge.onSurface.r, ThemeBridge.onSurface.g,
-                            ThemeBridge.onSurface.b, control.pressed ? 0.12 : 0.08);
+            return Qt.rgba(ThemeBridge.onSurface.r, ThemeBridge.onSurface.g,
+                           ThemeBridge.onSurface.b, control.pressed ? 0.12 : 0.08);
         }
         border.width: control.checked ? 0 : 2
         border.color: control.enabled ? ThemeBridge.onSurfaceVariant

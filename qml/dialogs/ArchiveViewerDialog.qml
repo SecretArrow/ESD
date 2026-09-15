@@ -143,7 +143,9 @@ Dialog {
         standardButtons: Dialog.Ok | Dialog.Cancel
         TextField {
             id: dirField
-            text: App.session(dlg.session.sessionId) ? "" : ""
+            // dlg.session is null until an archive viewer session opens -
+            // evaluating dlg.session.sessionId on a null var threw TypeError.
+            text: dlg.session && App.session(dlg.session.sessionId) ? "" : ""
             placeholderText: "/tmp/eclipse-extract or local folder"
             Layout.fillWidth: true
         }
