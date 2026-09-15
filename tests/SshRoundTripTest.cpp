@@ -301,5 +301,7 @@ private:
     }
 };
 
-QTEST_MAIN(SshRoundTripTest)
+// GUI-less: pure Core+Network test, QCoreApplication avoids any QPA platform
+// plugin (headless CI runners have no display).
+QTEST_GUILESS_MAIN(SshRoundTripTest)
 #include "SshRoundTripTest.moc"
