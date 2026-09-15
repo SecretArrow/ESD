@@ -120,7 +120,9 @@ private:
     ssh_channel_struct* m_channel = nullptr;
     bool m_closed = false;
 
-    bool sessionGone() const { return !m_alive || m_alive->load(std::memory_order_acquire); }
+    // Token semantics: TRUE = session memory valid (alive), FALSE = invalidated
+    // by disconnect()/destruction - mirrors LibsshEngine::sessionGone() (!load).
+    bool sessionGone() const { return !m_alive || !m_alive->load(std::memory_order_acquire); }
 };
 
 class LibsshSftp : public ISftpSession
@@ -156,7 +158,7 @@ private:
     std::shared_ptr<std::atomic<bool>> m_alive;
     sftp_session_struct* m_sftp = nullptr;
 
-    bool sessionGone() const { return !m_alive || m_alive->load(std::memory_order_acquire); }
+    bool sessionGone() const { return !m_alive || !m_alive->load(std::memory_order_acquire); }
 };
 
 class LibsshScp : public IScpSession
@@ -172,7 +174,7 @@ private:
     LibsshEngine* m_engine = nullptr;
     std::shared_ptr<std::atomic<bool>> m_alive;
 
-    bool sessionGone() const { return !m_alive || m_alive->load(std::memory_order_acquire); }
+    bool sessionGone() const { return !m_alive || !m_alive->load(std::memory_order_acquire); }
 };
 
 } // namespace eclipse
