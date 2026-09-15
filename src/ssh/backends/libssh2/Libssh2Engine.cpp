@@ -688,7 +688,12 @@ Outcome sftpFetchFileRaw(const Libssh2StatePtr& state, LIBSSH2_SFTP* sftp,
 
     quint64 size = 0;
     LIBSSH2_SFTP_ATTRIBUTES attrs;
-    if (libssh2_sftp_fstat_ex(h, &attrs, 0) == 0 && (attrs.flags & LIBSSH2_SFTP_ATTR_SIZE))
+    std::memset(&attrs, 0, sizeof(attrs));
+    // Non-blocking session: fstat needs the EAGAIN pump, a bare call returns
+    // EAGAIN on the first invocation and the size would read as 0.
+    const int src = retryEagain([&] { return libssh2_sftp_fstat_ex(h, &attrs, 0); },
+                                nowMs() + st->opTimeoutMs);
+    if (src == 0 && (attrs.flags & LIBSSH2_SFTP_ATTR_SIZE))
         size = quint64(attrs.filesize);
 
     QSaveFile out(localPath);
@@ -1339,8 +1344,12 @@ ISftpSession::FileHandle Libssh2Sftp::openForRead(const QString& path, quint64* 
     }
     if (sizeOut) {
         LIBSSH2_SFTP_ATTRIBUTES attrs;
-        if (libssh2_sftp_fstat_ex(h, &attrs, 0) == 0
-            && (attrs.flags & LIBSSH2_SFTP_ATTR_SIZE))
+        std::memset(&attrs, 0, sizeof(attrs));
+        // Non-blocking session: a bare fstat returns EAGAIN on first call,
+        // which silently reported size 0 for freshly opened files.
+        const int frc = retryEagain([&] { return libssh2_sftp_fstat_ex(h, &attrs, 0); },
+                                    nowMs() + st->opTimeoutMs);
+        if (frc == 0 && (attrs.flags & LIBSSH2_SFTP_ATTR_SIZE))
             *sizeOut = quint64(attrs.filesize);
         else
             *sizeOut = 0;
