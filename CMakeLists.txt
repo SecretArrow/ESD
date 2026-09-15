@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(EclipseSSH
-    VERSION 0.3.1
+    VERSION 0.3.2
     DESCRIPTION "Eclipse SSH Desktop - a modern, modular SSH/SFTP client"
     LANGUAGES CXX)
 

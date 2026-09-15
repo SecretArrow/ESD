@@ -9,7 +9,7 @@ T.TextField {
     implicitWidth: implicitBackgroundWidth + leftPadding + rightPadding
                    || 140
     implicitHeight: Math.max(implicitBackgroundHeight + topPadding + bottomPadding,
-                             implicitContentHeight + topPadding + bottomPadding, 40)
+                             contentHeight + topPadding + bottomPadding, 40)
 
     leftPadding: padding + 2
     rightPadding: padding + 2

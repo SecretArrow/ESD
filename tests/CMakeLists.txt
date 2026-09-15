@@ -24,3 +24,16 @@ target_link_libraries(test_archive PRIVATE
     Qt6::Test
 )
 add_test(NAME archive COMMAND $<TARGET_FILE:test_archive>)
+
+# Real SSH/SFTP round-trip against a live local sshd.
+# Enabled by the CI Linux job (ESD_SSHD_PORT/USER/KEY); QSKIPs when unset.
+find_package(Qt6 QUIET COMPONENTS Network)
+add_executable(test_ssh_roundtrip SshRoundTripTest.cpp)
+target_include_directories(test_ssh_roundtrip PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src ${CMAKE_BINARY_DIR}/generated)
+target_link_libraries(test_ssh_roundtrip PRIVATE
+    eclipse_ssh
+    Qt6::Test
+    $<$<TARGET_EXISTS:Qt6::Network>:Qt6::Network>
+)
+add_test(NAME ssh_roundtrip COMMAND $<TARGET_FILE:test_ssh_roundtrip>)
+set_tests_properties(ssh_roundtrip PROPERTIES TIMEOUT 180)

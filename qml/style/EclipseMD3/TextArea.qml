@@ -6,7 +6,7 @@ T.TextArea {
     id: control
 
     implicitWidth: implicitBackgroundWidth + leftPadding + rightPadding || 200
-    implicitHeight: Math.max(implicitContentHeight + topPadding + bottomPadding, 72)
+    implicitHeight: Math.max(contentHeight + topPadding + bottomPadding, 72)
 
     leftPadding: padding + 2
     rightPadding: padding + 2
