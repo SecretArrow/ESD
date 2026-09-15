@@ -254,8 +254,18 @@ set_source_files_properties(
 set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/resources/fonts/MaterialSymbolsRounded-Fill.ttf PROPERTIES
     QT_RESOURCE_ALIAS "MaterialSymbolsRounded-Fill.ttf")
+# The style needs to be visible at TWO resource locations (Qt's import
+# machinery requires a module's location to match its declared URI):
+#  1. /qt-project.org/imports/QtQuick/Controls/EclipseMD3  <- style selector
+#     discovery (QQuickStyleSelector looks under <importPath>/QtQuick/Controls)
+#  2. /qt-project.org/imports/EclipseMD3                    <- module import
+#     When active, the engine imports the style as a bare QML module named
+#     "EclipseMD3", which resolves only at <importPath>/EclipseMD3/qmldir.
 qt_add_resources(eclipse-ssh-desktop "md3style"
     PREFIX "/qt-project.org/imports/QtQuick/Controls/EclipseMD3"
+    FILES ${ECLIPSE_MD3_STYLE_FILES})
+qt_add_resources(eclipse-ssh-desktop "md3style-module"
+    PREFIX "/qt-project.org/imports/EclipseMD3"
     FILES ${ECLIPSE_MD3_STYLE_FILES})
 qt_add_resources(eclipse-ssh-desktop "md3fonts"
     PREFIX "/fonts"
