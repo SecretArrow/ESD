@@ -20,8 +20,8 @@ T.ComboBox {
     hoverEnabled: true
     font.pixelSize: 13
 
-    selectionColor: ThemeBridge.primary
-    selectedTextColor: ThemeBridge.onPrimary
+    // (text selection colors belong on the editable TextInput contentItem,
+    //  T.ComboBox itself has no selectionColor/selectedTextColor properties)
 
     delegate: T.ItemDelegate {
         id: comboDelegate
