@@ -77,7 +77,7 @@ Dialog {
                 Label { text: qsTr("SHA256"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall }
             }
             Label {
-                text: keyInfo.sha256
+                text: keyInfo.sha256 ? String(keyInfo.sha256) : ""
                 color: Theme.onSurface
                 font.family: "monospace"
                 font.pixelSize: Theme.typeBodySmall
@@ -91,7 +91,7 @@ Dialog {
                 Label { text: qsTr("MD5"); color: Theme.onSurfaceVariant; font.pixelSize: Theme.typeBodySmall }
             }
             Label {
-                text: keyInfo.md5
+                text: keyInfo.md5 ? String(keyInfo.md5) : ""
                 color: Theme.onSurfaceVariant
                 font.family: "monospace"
                 font.pixelSize: Theme.typeLabelSmall

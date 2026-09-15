@@ -29,6 +29,14 @@ Dialog {
     // "ssh" | "telnet" | "serial" (progressive disclosure of the sections below)
     property string connType: draft ? draft.connectionType : "ssh"
 
+    // Index of the auth method in [password, publickey, agent, keyboard-interactive].
+    // Lives on the dialog ROOT: unqualified lookups only see the component root
+    // chain, so a helper defined on an intermediate GridLayout is invisible to
+    // its children ("ReferenceError: authBoxIdx is not defined").
+    function authBoxIdx() {
+        return dlg.draft ? ["password","publickey","agent","keyboard-interactive"].indexOf(dlg.draft.authMethod) : 0
+    }
+
     contentItem: ColumnLayout {
         spacing: 12
 
@@ -61,28 +69,28 @@ Dialog {
             Label { text: qsTr("Port"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium }
             TextField { text: dlg.draft ? String(dlg.draft.port) : "22"; onTextChanged: { if (dlg.draft) dlg.draft.port = parseInt(text || "22") } }
             Label { text: qsTr("Username"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium }
-            TextField { text: dlg.draft ? dlg.draft.username : ""; onTextChanged: { if (dlg.draft) dlg.draft.username = text } Layout.fillWidth: true }
+            TextField { text: dlg.draft ? dlg.draft.username : ""; onTextChanged: { if (dlg.draft) dlg.draft.username = text } Layout.fillWidth: true
+                        onAccepted: dlg.accept() }
             Label { text: qsTr("Authentication"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium }
             ComboBox {
                 model: ["password", "publickey", "agent", "keyboard-interactive"]
                 currentIndex: dlg.draft ? model.indexOf(dlg.draft.authMethod) : 0
                 onActivated: (i) => { if (dlg.draft) dlg.draft.authMethod = model[i] }
             }
-            Label { text: qsTr("Password"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium; visible: authBoxIdx() === 0 || authBoxIdx() === 3 }
+            Label { text: qsTr("Password"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium; visible: dlg.authBoxIdx() === 0 || dlg.authBoxIdx() === 3 }
             TextField { id: passField; echoMode: TextInput.Password; Layout.fillWidth: true
-                        visible: authBoxIdx() === 0 || authBoxIdx() === 3
-                        onTextChanged: dlg.password = text }
-            Label { text: qsTr("Private key"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium; visible: authBoxIdx() === 1 }
-            RowLayout { visible: authBoxIdx() === 1; Layout.fillWidth: true
+                        visible: dlg.authBoxIdx() === 0 || dlg.authBoxIdx() === 3
+                        onTextChanged: dlg.password = text
+                        onAccepted: dlg.accept() }
+            Label { text: qsTr("Private key"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium; visible: dlg.authBoxIdx() === 1 }
+            RowLayout { visible: dlg.authBoxIdx() === 1; Layout.fillWidth: true
                 TextField { id: keyField; text: dlg.draft ? dlg.draft.privateKeyPath : ""; onTextChanged: { if (dlg.draft) dlg.draft.privateKeyPath = text } Layout.fillWidth: true }
                 IconToolButton { iconName: "folder_open"; iconSize: 18; toolTip: qsTr("Browse…"); onClicked: keyDialog.open() }
             }
-            Label { text: qsTr("Passphrase"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium; visible: authBoxIdx() === 1 }
-            TextField { echoMode: TextInput.Password; Layout.fillWidth: true; visible: authBoxIdx() === 1
-                        onTextChanged: dlg.passphrase = text }
-        }
-        function authBoxIdx() {
-            return dlg.draft ? ["password","publickey","agent","keyboard-interactive"].indexOf(dlg.draft.authMethod) : 0
+            Label { text: qsTr("Passphrase"); color: Theme.onSurface; font.pixelSize: Theme.typeBodyMedium; visible: dlg.authBoxIdx() === 1 }
+            TextField { echoMode: TextInput.Password; Layout.fillWidth: true; visible: dlg.authBoxIdx() === 1
+                        onTextChanged: dlg.passphrase = text
+                        onAccepted: dlg.accept() }
         }
 
         // ---- Telnet basic section ----

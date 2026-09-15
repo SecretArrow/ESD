@@ -65,6 +65,12 @@ jobs:
           echo "--- recent app logs ---"
           find "$HOME/.cache" -type f -name "*.log" -mmin -3 2>/dev/null | head -5 | xargs -r tail -40
           [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ] || [ "$RC" -eq 137 ]
+          # QML health gate: zero runtime binding/reference errors allowed to ship
+          if grep -nE "ReferenceError|is not defined|Unable to assign|TypeError:|Style names must not contain paths|failed to load icon font|Cannot override FINAL" /tmp/smoke.log; then
+            echo "FATAL: QML runtime errors in smoke log"; exit 1
+          fi
+          # style gate: the MD3 style must actually resolve (not silently Basic)
+           grep -q "Quick Controls style (post-load): EclipseMD3" /tmp/smoke.log || { echo "FATAL: EclipseMD3 style not active"; exit 1; }
 
       - name: ccache stats
         run: ccache -s || true
@@ -109,6 +115,11 @@ jobs:
           '
           echo "--- app log ---"; tail -20 /tmp/app.log || true
           ls -la dist/shots
+          # gate 0: QML health - no runtime errors in the interactive run
+          if grep -nE "ReferenceError|is not defined|Unable to assign|TypeError:|Style names must not contain paths|failed to load icon font|Cannot override FINAL" /tmp/app.log; then
+            echo "FATAL: QML runtime errors in app log"; exit 1
+          fi
+           grep -q "Quick Controls style (post-load): EclipseMD3" /tmp/app.log || { echo "FATAL: EclipseMD3 style not active"; exit 1; }
           # gate 1: main shot exists
           [ -s dist/shots/02-main.png ] || { echo "FATAL: main screenshot missing"; exit 1; }
           # gate 2: not a blank screen (blank 1440x900 PNG has ~1-2 unique colors)

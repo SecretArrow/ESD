@@ -119,7 +119,15 @@ int main(int argc, char* argv[])
     // Material Design 3: custom Quick Controls style resolved from the
     // compiled-in resource tree, plus the Material Symbols Rounded icon
     // fonts used by MaterialIcon.qml and the EclipseMD3 style components.
-    QQuickStyle::setStyle(QStringLiteral(":/style/EclipseMD3"));
+    // NOTE: the style must be a bare NAME - QQuickStyle rejects path-like
+    // style names ("Style names must not contain paths"), so the style QML
+    // is embedded at the import-path location QtQuick/Controls/EclipseMD3
+    // (see src/CMakeLists.txt "md3style" resource prefix).
+    QQuickStyle::setStyle(QStringLiteral("EclipseMD3"));
+    // Startup evidence for CI smoke gates: proves the custom style resolved
+    // (a path-style or missing style would fall back to "Basic" here).
+    std::fprintf(stdout, "Quick Controls style: %s\n", QQuickStyle::name().toUtf8().constData());
+    std::fflush(stdout);
     for (const char* fontResource : { ":/fonts/MaterialSymbolsRounded.ttf",
                                       ":/fonts/MaterialSymbolsRounded-Fill.ttf" }) {
         if (QFontDatabase::addApplicationFont(QString::fromLatin1(fontResource)) < 0)
@@ -136,7 +144,18 @@ int main(int argc, char* argv[])
     parser.setApplicationDescription(QStringLiteral("Eclipse SSH Desktop - modern SSH/SFTP client"));
     parser.addHelpOption();
     parser.addVersionOption();
+    // Verbose diagnostics: Qt debug categories + app log mirrored to stderr.
+    QCommandLineOption debugOpt(
+        { QStringLiteral("d"), QStringLiteral("debug") },
+        QStringLiteral("Enable verbose diagnostics on stderr (and verbose app logs)."));
+    parser.addOption(debugOpt);
     parser.process(app);
+    if (parser.isSet(debugOpt)) {
+        // Surface all Qt debug output and the app's own debug logs.
+        qputenv("QT_LOGGING_RULES", "*.debug=true\nqt.qml.*.debug=true");
+        qputenv("ECLIPSE_LOG_STDERR", "1");
+        Logger::instance().enableDebugMode(true);
+    }
 
     // File logging must be live BEFORE the single-instance check so that an
     // "already running" event is actually recorded somewhere visible.
@@ -271,6 +290,14 @@ int main(int argc, char* argv[])
                      },
                      Qt::QueuedConnection);
     engine.load(url);
+
+    // Post-load evidence for CI smoke gates: QQuickStyle::name() now reflects
+    // the style the engine actually resolved. If the embedded EclipseMD3
+    // resources were mis-aliased or the name rejected, this prints the
+    // fallback (e.g. "Basic") and CI fails the gate.
+    std::fprintf(stdout, "Quick Controls style (post-load): %s\n",
+                 QQuickStyle::name().toUtf8().constData());
+    std::fflush(stdout);
 
     // ---- Global command palette entries -----------------------------------
     AppController& controller = AppController::instance();

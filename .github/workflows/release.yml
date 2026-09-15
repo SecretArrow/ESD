@@ -160,6 +160,11 @@ jobs:
           done
           [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ] || [ "$RC" -eq 137 ]
           if grep -qi "is not installed" /tmp/smoke.log; then echo "QML MODULE MISSING IN DIST"; exit 1; fi
+          # QML health gate: zero runtime binding/reference errors allowed to ship
+          if grep -nE "ReferenceError|is not defined|Unable to assign|TypeError:|Style names must not contain paths|failed to load icon font|Cannot override FINAL" /tmp/smoke.log; then
+            echo "FATAL: QML runtime errors in smoke log"; exit 1
+          fi
+           grep -q "Quick Controls style (post-load): EclipseMD3" /tmp/smoke.log || { echo "FATAL: EclipseMD3 style not active"; exit 1; }
 
       - name: Zip portable
         shell: msys2 {0}
@@ -187,6 +192,10 @@ jobs:
           if grep -qi "is not installed" /tmp/smoke-win.log; then
             echo "QML MODULES NOT IMPORTABLE FROM DIST (qt.conf/import path bug)"; exit 1
           fi
+          if grep -nE "ReferenceError|is not defined|Unable to assign|TypeError:|Style names must not contain paths|failed to load icon font|Cannot override FINAL" /tmp/smoke-win.log; then
+            echo "FATAL: QML runtime errors in smoke log"; exit 1
+          fi
+           grep -q "Quick Controls style (post-load): EclipseMD3" /tmp/smoke-win.log || { echo "FATAL: EclipseMD3 style not active"; exit 1; }
           test -f ./dist/win64/qt.conf || { echo "qt.conf missing from dist"; exit 1; }
 
       - name: Single instance (2nd exits 0 and pokes 1st; 1st stays alive)
