@@ -193,6 +193,12 @@ char* ec_theme_css(const EcTheme* t)
         ".muted { color: %s; }\n"
         ".accent-text { color: %s; }\n"
         ".session-dot { min-width: 10px; min-height: 10px; border-radius: 5px; }\n"
+        ".c-gray { background: #8a8a8a; }\n"
+        ".c-red { background: #e5484d; }\n"
+        ".c-amber { background: #e5b567; }\n"
+        ".c-green { background: #46a758; }\n"
+        ".c-blue { background: #4f8cff; }\n"
+        ".c-purple { background: #9d59e5; }\n"
         ".palette-pop { background: %s; border: 1px solid %s; border-radius: %s; padding: 6px; }\n"
         ".transfer-bar { background: %s; }\n",
         t->name,

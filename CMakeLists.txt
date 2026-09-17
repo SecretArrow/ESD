@@ -30,7 +30,7 @@ endif()
 # ---- shared compile hygiene for our own sources ----
 add_library(ec_flags INTERFACE)
 target_compile_options(ec_flags INTERFACE
-  -Wall -Wextra -Wshadow -Wconversion -Wno-unused-parameter
+  -Wall -Wextra -Wshadow -Wconversion -Wno-unused-parameter -Wno-missing-field-initializers
   $<$<BOOL:${ECLIPSE_WERROR}>:-Werror>
   -D_GNU_SOURCE -D_DEFAULT_SOURCE)
 if(WIN32)
@@ -62,6 +62,36 @@ target_link_libraries(eclipse_core PUBLIC ec_includes)
 target_link_libraries(eclipse_core PUBLIC ec_flags PkgConfig::GLIB2 OpenSSL::Crypto)
 find_package(Threads REQUIRED)
 target_link_libraries(eclipse_core PUBLIC eclipse_platform Threads::Threads)
+
+# Windows/MSYS2: pkg-config emits /mingw64 paths cmake cannot map - construct
+# imported targets directly from the MSYSTEM prefix instead.
+if(WIN32)
+  find_program(CYGPATH_EXE cygpath)
+  set(MS2_PREFIX "")
+  if(CYGPATH_EXE)
+    execute_process(COMMAND ${CYGPATH_EXE} -m /mingw64 OUTPUT_VARIABLE MS2_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  endif()
+  if(NOT MS2_PREFIX)
+    set(MS2_PREFIX "C:/msys64/mingw64")
+  endif()
+  macro(ms2_target name inc lib)
+    find_path(${name}_INCLUDE_DIR ${inc} PATHS ${MS2_PREFIX}/include NO_DEFAULT_PATH)
+    find_library(${name}_LIBRARY ${lib} PATHS ${MS2_PREFIX}/lib NO_DEFAULT_PATH)
+    if(NOT TARGET PkgConfig::${name})
+      add_library(PkgConfig::${name} INTERFACE IMPORTED)
+      set_target_properties(PkgConfig::${name} PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${${name}_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES "${${name}_LIBRARY}")
+    endif()
+  endmacro()
+  ms2_target(GLIB2 glib.h glib-2.0)
+  ms2_target(GIO2 gio/gio.h gio-2.0)
+  ms2_target(LIBSSH libssh/libssh.h ssh)
+  ms2_target(VTERM vterm.h vterm)
+  ms2_target(GTK4 gtk/gtk.h gtk-4)
+  # link dirs for deps of gtk4 (pango/gdk etc all in same lib dir)
+  link_directories(${MS2_PREFIX}/lib)
+endif()
 
 # Optional extra include dir (dev sandboxes with bundled libssh/libvterm)
 set(ECLIPSE_EXTRA_INCLUDES "" CACHE PATH "Extra include dir for bundled deps")
