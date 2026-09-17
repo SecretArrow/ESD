@@ -737,7 +737,7 @@ void ui_settings_page_build(EcApp* app)
     GtkWidget* lbl;
 
     /* theme dropdown */
-    GtkWidget* dd = gtk_drop_down_from_strings((const char* const[]){ "light", "dark", NULL });
+    GtkWidget* dd = gtk_drop_down_new_from_strings((const char* const[]){ "light", "dark", NULL });
     if (strcmp(app->settings.theme, "dark") == 0) gtk_drop_down_set_selected(GTK_DROP_DOWN(dd), 1);
     lbl = gtk_label_new("Theme");
     gtk_label_set_xalign(GTK_LABEL(lbl), 0.0);
@@ -810,7 +810,6 @@ static void palette_execute(GtkEntry* entry, gpointer user)
             return;
         }
     }
-    guint n2 = gtk_notebook_get_n_pages(GTK_NOTEBOOK(app->notebook));
     int cur2 = gtk_notebook_get_current_page(GTK_NOTEBOOK(app->notebook));
     if (cur2 >= 0 && text && *text) {
         for (size_t j = 0; j < app->live.len; j++) {
