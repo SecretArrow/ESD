@@ -104,7 +104,7 @@ jobs:
           msystem: MINGW64
           update: false
           install: >-
-            git make ninja
+            git make ninja zip
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-pkg-config
@@ -153,12 +153,13 @@ jobs:
           # GTK4 requires its schemas + loaders; copy minimal trees
           cp -r /mingw64/lib/gtk-4.0 lib/ 2>/dev/null || true
           cd ..
-          7z a eclipse-ssh-windows-x86_64.zip win64 > /dev/null || true
-          ls -la
+          rm -f eclipse-ssh-windows-x86_64.zip
+          zip -r eclipse-ssh-windows-x86_64.zip win64 > /dev/null
+          ls -la eclipse-ssh-windows-x86_64.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-package
           path: dist/eclipse-ssh-windows-x86_64.zip
-          if-no-files-found: warn
+          if-no-files-found: error
