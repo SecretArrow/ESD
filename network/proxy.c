@@ -146,9 +146,9 @@ int ec_proxy_dial(const EcProxy* px, const char* dest_host, int dest_port,
             char b64[400];
             size_t bo = 0;
             for (int i = 0; i < l; i += 3) {
-                unsigned v = (unsigned char)up[i] << 16;
-                if (i + 1 < l) v |= (unsigned char)up[i + 1] << 8;
-                if (i + 2 < l) v |= (unsigned char)up[i + 2];
+                unsigned v = (unsigned)((unsigned char)up[i] << 16);
+                if (i + 1 < l) v |= (unsigned)((unsigned char)up[i + 1] << 8);
+                if (i + 2 < l) v |= (unsigned)(unsigned char)up[i + 2];
                 b64[bo++] = b64t[(v >> 18) & 63];
                 b64[bo++] = b64t[(v >> 12) & 63];
                 b64[bo++] = (i + 1 < l) ? b64t[(v >> 6) & 63] : '=';

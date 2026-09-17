@@ -182,7 +182,7 @@ bool ec_sftp_stat(EcSftp* sf, const char* path, EcSftpEntry* out)
 
 bool ec_sftp_chmod(EcSftp* sf, const char* path, uint32_t mode)
 {
-    int rc = sftp_chmod(sf->sftp, path, mode);
+    int rc = sftp_chmod(sf->sftp, path, (mode_t)mode);
     if (rc != SSH_OK) set_serr(sf, "chmod failed");
     return rc == SSH_OK;
 }
@@ -221,7 +221,7 @@ static void rate_limit_wait(EcTransfer* t, uint64_t limit_bps, uint64_t bytes_th
     if (*tokens < 0) {
         double deficit_s = -(*tokens) / (double)limit_bps;
         int ms = (int)(deficit_s * 1000.0);
-        if (ms > 0) g_usleep((guint64)ms * 1000);
+        if (ms > 0) g_usleep((gulong)ms * 1000u);
     }
 }
 
