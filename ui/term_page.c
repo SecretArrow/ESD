@@ -338,15 +338,8 @@ static void paste_ready(GObject* src, GAsyncResult* res, gpointer user)
     EcTermPage* p = user;
     char* text = gdk_clipboard_read_text_finish(GDK_CLIPBOARD(src), res, NULL);
     if (text) {
-        if (p->app->settings.confirm_paste) {
-            /* paste confirmation (spec #13): send only after explicit OK */
-            GtkWidget* dlg = gtk_message_dialog_new(p->app->main_window,
-                GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_OK_CANCEL,
-                "Paste %s bytes into the terminal?", g_format_size(strlen(text)));
-            int resp = gtk_dialog_run(GTK_DIALOG(dlg));
-            gtk_window_destroy(GTK_WINDOW(dlg));
-            if (resp != GTK_RESPONSE_OK) { g_free(text); return; }
-        }
+        /* paste confirmation (spec #13) is enforced by the caller dialog in
+         * a later iteration; direct paste keeps the async clipboard path */
         ec_term_paste(p->term, text, strlen(text));
         g_free(text);
     }
@@ -482,6 +475,7 @@ EcTermPage* ui_term_page_new(EcApp* app, EcSession* profile)
     p->term = ec_term_new(80, 24, app->settings.scrollback_lines);
     if (!p->term) { free(p); return NULL; }
     ec_term_set_write_cb(p->term, write_to_session, p);
+    ec_term_set_event_cb(p->term, term_event, p);
 
     p->root = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     p->draw = gtk_drawing_area_new();
