@@ -8,8 +8,11 @@ option(ECLIPSE_BUILD_TESTS "Build tests" ON)
 option(ECLIPSE_WERROR "Treat warnings as errors (spec rule 20)" ON)
 option(ECLIPSE_ASAN "Enable ASan/UBSan" OFF)
 
-# zlib must be resolvable after static libssh/gio on link order (DSO missing fix)
-set(CMAKE_C_STANDARD_LIBRARIES "-lz -lgssapi_krb5 -lkrb5 -lk5crypto -lcom_err ${CMAKE_C_STANDARD_LIBRARIES}")
+# Local-sandbox static libssh needs zlib+krb appended after targets; CI uses
+# shared libssh where this is unnecessary (and libkrb5 may be absent).
+if(ECLIPSE_EXTRA_INCLUDES)
+  set(CMAKE_C_STANDARD_LIBRARIES "-lz -lgssapi_krb5 -lkrb5 -lk5crypto -lcom_err ${CMAKE_C_STANDARD_LIBRARIES}")
+endif()
 
 if(ECLIPSE_ASAN)
   add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
