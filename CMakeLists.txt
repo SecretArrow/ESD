@@ -137,10 +137,15 @@ target_link_libraries(eclipse_security PUBLIC ec_includes)
 target_link_libraries(eclipse_security PUBLIC eclipse_core ecdep::LIBSSH OpenSSL::Crypto)
 
 # ============================================================= ssh engine
-add_library(eclipse_ssh STATIC ssh/ssh_engine.c ssh/session.c)
+add_library(eclipse_ssh STATIC ssh/ssh_engine.c)
 target_include_directories(eclipse_ssh PUBLIC ssh)
 target_link_libraries(eclipse_ssh PUBLIC ec_includes)
-target_link_libraries(eclipse_ssh PUBLIC eclipse_core eclipse_security ecdep::LIBSSH eclipse_sftp eclipse_terminal eclipse_forward eclipse_config)
+target_link_libraries(eclipse_ssh PUBLIC eclipse_core eclipse_security ecdep::LIBSSH)
+
+# session orchestration composes ssh + sftp + terminal + forwarding + config
+add_library(eclipse_session STATIC ssh/session.c)
+target_link_libraries(eclipse_session PUBLIC
+  eclipse_ssh eclipse_sftp eclipse_terminal eclipse_forward eclipse_config)
 
 # ============================================================= sftp
 add_library(eclipse_sftp STATIC sftp/sftp.c)
