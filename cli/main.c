@@ -264,26 +264,45 @@ static void cmd_pipe(int argc, char** argv)
         g_object_unref(conn);
         if (fd < 0) { g_exit_code = 2; return; }
     }
-    /* bridge stdin/stdout <-> fd until EOF */
+    /* bridge stdin/stdout <-> fd until EOF (portable select) */
     for (;;) {
         fd_set rf;
         FD_ZERO(&rf);
+#ifdef _WIN32
+        FD_SET((SOCKET)fd, &rf);
+        int nfds = 0;
+#else
         FD_SET(0, &rf);
         FD_SET(fd, &rf);
-        if (select(fd + 1, &rf, NULL, NULL, NULL) <= 0) break;
+        int nfds = fd + 1;
+#endif
+        if (select(nfds, &rf, NULL, NULL, NULL) <= 0) break;
         char buf[8192];
         ssize_t n;
+#ifdef _WIN32
+        if (FD_ISSET((SOCKET)fd, &rf)) {
+#else
         if (FD_ISSET(0, &rf)) {
+#endif
             n = read(0, buf, sizeof buf);
             if (n <= 0) break;
             ssize_t off = 0;
             while (off < n) {
+#ifdef _WIN32
+                ssize_t w = send((SOCKET)fd, buf + off, (int)(n - off), 0);
+#else
                 ssize_t w = write(fd, buf + off, (size_t)(n - off));
+#endif
                 if (w <= 0) goto out;
                 off += w;
             }
         }
+#ifdef _WIN32
+        if (FD_ISSET((SOCKET)fd, &rf)) {
+#endif
+#ifndef _WIN32
         if (FD_ISSET(fd, &rf)) {
+#endif
             n = read(fd, buf, sizeof buf);
             if (n <= 0) break;
             fwrite(buf, 1, (size_t)n, stdout);
@@ -291,7 +310,11 @@ static void cmd_pipe(int argc, char** argv)
         }
     }
 out:
+#ifdef _WIN32
+    closesocket((SOCKET)fd);
+#else
     close(fd);
+#endif
 }
 
 int main(int argc, char** argv)
