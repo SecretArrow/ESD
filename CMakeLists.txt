@@ -133,6 +133,7 @@ target_link_libraries(eclipse_platform PUBLIC ec_includes)
 # ============================================================= security
 add_library(eclipse_security STATIC security/security.c)
 target_include_directories(eclipse_security PUBLIC security)
+target_compile_options(eclipse_security PRIVATE -Wno-deprecated-declarations) # libssh 0.12: ssh_pki_generate pending migration
 target_link_libraries(eclipse_security PUBLIC ec_includes)
 target_link_libraries(eclipse_security PUBLIC eclipse_core ecdep::LIBSSH OpenSSL::Crypto)
 
