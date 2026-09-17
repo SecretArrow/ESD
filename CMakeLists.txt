@@ -122,7 +122,11 @@ endif()
 
 # ============================================================= platform
 add_library(eclipse_platform STATIC platform/platform_posix.c platform/platform_win32.c)
-set_source_files_properties(platform/platform_win32.c PROPERTIES HEADER_FILE_ONLY ON)
+if(WIN32)
+  set_source_files_properties(platform/platform_posix.c PROPERTIES HEADER_FILE_ONLY ON)
+else()
+  set_source_files_properties(platform/platform_win32.c PROPERTIES HEADER_FILE_ONLY ON)
+endif()
 target_include_directories(eclipse_platform PUBLIC platform)
 target_link_libraries(eclipse_platform PUBLIC ec_includes)
 
