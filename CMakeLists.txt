@@ -83,7 +83,11 @@ if(WIN32)
   macro(ms2_target name incdirs libs)
     set(${name}_INCLUDES "")
     foreach(d ${incdirs})
-      list(APPEND ${name}_INCLUDES "${MS2_PREFIX}/include/${d}")
+      if(d MATCHES "^lib/")
+        list(APPEND ${name}_INCLUDES "${MS2_PREFIX}/${d}")
+      else()
+        list(APPEND ${name}_INCLUDES "${MS2_PREFIX}/include/${d}")
+      endif()
     endforeach()
     set(${name}_LIBS "")
     foreach(l ${libs})
@@ -132,7 +136,7 @@ target_link_libraries(eclipse_security PUBLIC eclipse_core ecdep::LIBSSH OpenSSL
 add_library(eclipse_ssh STATIC ssh/ssh_engine.c ssh/session.c)
 target_include_directories(eclipse_ssh PUBLIC ssh)
 target_link_libraries(eclipse_ssh PUBLIC ec_includes)
-target_link_libraries(eclipse_ssh PUBLIC eclipse_core eclipse_security ecdep::LIBSSH)
+target_link_libraries(eclipse_ssh PUBLIC eclipse_core eclipse_security ecdep::LIBSSH eclipse_sftp eclipse_terminal eclipse_forward eclipse_config)
 
 # ============================================================= sftp
 add_library(eclipse_sftp STATIC sftp/sftp.c)
@@ -174,7 +178,7 @@ if(ECLIPSE_BUILD_UI)
 target_link_libraries(eclipse_ui PUBLIC ec_includes)
   target_link_libraries(eclipse_ui PUBLIC
     eclipse_core eclipse_config eclipse_security eclipse_ssh eclipse_sftp
-    eclipse_terminal eclipse_forward ecdep::GTK4)
+    eclipse_terminal eclipse_forward eclipse_session ecdep::GTK4)
 
   add_executable(eclipse-ssh app/main.c)
   target_link_libraries(eclipse-ssh PRIVATE eclipse_ui)
@@ -185,7 +189,7 @@ endif()
 add_executable(eclipse-ssh-cli cli/main.c)
 target_link_libraries(eclipse-ssh-cli PRIVATE
   eclipse_core eclipse_config eclipse_security eclipse_ssh eclipse_sftp
-  eclipse_forward eclipse_network ecdep::GIO2 ZLIB::ZLIB)
+  eclipse_forward eclipse_session eclipse_network ecdep::GIO2)
 install(TARGETS eclipse-ssh-cli RUNTIME DESTINATION bin)
 
 # ============================================================= tests
