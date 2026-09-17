@@ -215,7 +215,7 @@ typedef struct {
     GMainLoop* loop;
 } HKCtx;
 
-static void hk_respond(AdwMessageDialog* dlg, gchar* response, gpointer user)
+static void hk_respond(AdwAlertDialog* dlg, gchar* response, gpointer user)
 {
     HKCtx* ctx = user;
     (void)dlg;
@@ -245,20 +245,19 @@ static gboolean hk_show_idle(gpointer user)
     snprintf(body, sizeof body,
              "%s\n\nHost: %s:%d\nKey type: %s\nFingerprint: %s\n\nAccept this host key?",
              warn, ctx->host, ctx->port, ctx->key.type ? ctx->key.type : "?", fp);
-    AdwDialog* dlg = ADW_DIALOG(adw_message_dialog_new(ctx->app->main_window, heading, body));
-    AdwMessageDialog* md = ADW_MESSAGE_DIALOG(dlg);
-    adw_message_dialog_add_response(md, "reject", "Reject");
-    adw_message_dialog_add_response(md, "once", "Accept once");
+    AdwAlertDialog* dlg = adw_alert_dialog_new(heading, body);
+    adw_alert_dialog_add_response(dlg, "reject", "Reject");
+    adw_alert_dialog_add_response(dlg, "once", "Accept once");
     if (ctx->st != EC_HK_CHANGED) {
-        adw_message_dialog_add_response(md, "save", "Trust and save");
-        adw_message_dialog_set_response_appearance(md, "save", ADW_RESPONSE_SUGGESTED);
+        adw_alert_dialog_add_response(dlg, "save", "Trust and save");
+        adw_alert_dialog_set_response_appearance(dlg, "save", ADW_RESPONSE_SUGGESTED);
     } else {
-        adw_message_dialog_set_response_appearance(md, "reject", ADW_RESPONSE_DESTRUCTIVE);
+        adw_alert_dialog_set_response_appearance(dlg, "reject", ADW_RESPONSE_DESTRUCTIVE);
     }
-    adw_message_dialog_set_default_response(md, "once");
-    adw_message_dialog_set_close_response(md, "reject");
-    g_signal_connect(md, "response", G_CALLBACK(hk_respond), ctx);
-    adw_dialog_present(dlg, GTK_WIDGET(ctx->app->main_window));
+    adw_alert_dialog_set_default_response(dlg, "once");
+    adw_alert_dialog_set_close_response(dlg, "reject");
+    g_signal_connect(dlg, "response", G_CALLBACK(hk_respond), ctx);
+    adw_dialog_present(ADW_DIALOG(dlg), GTK_WIDGET(ctx->app->main_window));
     return G_SOURCE_REMOVE;
 }
 
@@ -526,15 +525,20 @@ void ui_show_connect_dialog(EcApp* app, EcSession* existing)
 }
 
 /* ============================================================ error/about */
+static void err_response(AdwAlertDialog* dlg, gchar* response, gpointer user)
+{
+    (void)response; (void)user;
+    adw_dialog_force_close(ADW_DIALOG(dlg));
+}
+
 void ui_show_error(EcApp* app, const char* title, const char* message)
 {
-    AdwDialog* dlg = ADW_DIALOG(adw_message_dialog_new(app->main_window, title,
-                                                       message ? message : title));
-    AdwMessageDialog* md = ADW_MESSAGE_DIALOG(dlg);
-    adw_message_dialog_add_response(md, "close", "Close");
-    adw_message_dialog_set_default_response(md, "close");
-    adw_message_dialog_set_close_response(md, "close");
-    adw_dialog_present(dlg, GTK_WIDGET(app->main_window));
+    AdwAlertDialog* dlg = adw_alert_dialog_new(title, message ? message : title);
+    adw_alert_dialog_add_response(dlg, "close", "Close");
+    adw_alert_dialog_set_default_response(dlg, "close");
+    adw_alert_dialog_set_close_response(dlg, "close");
+    g_signal_connect(dlg, "response", G_CALLBACK(err_response), NULL);
+    adw_dialog_present(ADW_DIALOG(dlg), GTK_WIDGET(app->main_window));
 }
 
 void ui_show_about(EcApp* app)

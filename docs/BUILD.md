@@ -5,7 +5,7 @@
 | Component | Ubuntu/Debian package | MSYS2 (MINGW64) package |
 |---|---|---|
 | Build | build-essential, ninja-build, cmake, pkg-config | mingw-w64-x86_64-gcc, -cmake, -ninja |
-| UI (GTK4) | libgtk-4-dev, libadwaita-1-dev | mingw-w64-x86_64-gtk4, -libadwaita |
+| UI (GTK4) | libgtk-4-dev, libadwaita-1-dev (>= 1.5) | mingw-w64-x86_64-gtk4, -libadwaita |
 | SSH | libssh-dev | mingw-w64-x86_64-libssh |
 | Terminal | libvterm-dev | mingw-w64-x86_64-libvterm |
 | Crypto | libssl-dev | mingw-w64-x86_64-openssl |
