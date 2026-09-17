@@ -30,7 +30,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             ninja-build ccache gcc pkg-config openssh-server \
-            libgtk-4-dev libssh-dev libvterm-dev libssl-dev zlib1g-dev \
+            libgtk-4-dev libadwaita-1-dev libssh-dev libvterm-dev libssl-dev zlib1g-dev \
             xvfb file
 
       - name: Build (warnings are errors)
@@ -109,6 +109,7 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-gtk4
+            mingw-w64-x86_64-libadwaita
             mingw-w64-x86_64-libssh
             mingw-w64-x86_64-libvterm
             mingw-w64-x86_64-openssl
@@ -123,8 +124,6 @@ jobs:
       - name: Unit tests
         run: ./build/ci/test_unit
 
-      - name: CLI smoke
-        run: ./build/ci/eclipse-ssh-cli list
       - name: CLI smoke
         run: ./build/ci/eclipse-ssh-cli list
 

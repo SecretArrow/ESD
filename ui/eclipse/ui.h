@@ -53,6 +53,14 @@ void ui_term_page_free(EcTermPage* page);
 void ui_term_page_focus(EcTermPage* page);
 void ui_term_page_run_snippet(EcTermPage* page, const char* command);
 
+/* panes.c - split-pane terminal groups (one notebook tab = one group) */
+void ui_pane_group_attach(EcApp* app, GtkWidget* container, EcTermPage* page);
+void ui_pane_group_dispose(EcApp* app, GtkWidget* container);
+void ui_split_pane(EcTermPage* page, bool vertical);
+void ui_close_pane(EcTermPage* page);
+void ui_note_focus(EcTermPage* page);
+EcTermPage* ui_current_term_page(EcApp* app);
+
 /* sftp_page.c */
 void ui_sftp_page_build(EcApp* app); /* adds page to stack */
 

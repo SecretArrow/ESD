@@ -32,6 +32,8 @@ if(NOT WIN32)
   if(ECLIPSE_BUILD_UI)
     pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
     add_library(ecdep::GTK4 ALIAS PkgConfig::GTK4)
+    pkg_check_modules(ADW REQUIRED IMPORTED_TARGET libadwaita-1)
+    add_library(ecdep::ADW ALIAS PkgConfig::ADW)
   endif()
 endif()
 find_package(OpenSSL REQUIRED)
@@ -110,6 +112,8 @@ if(WIN32)
   if(ECLIPSE_BUILD_UI)
     set(GTK4_DIRS "gtk-4.0;gdk-pixbuf-2.0;pango-1.0;harfbuzz;cairo;graphene-1.0;lib/graphene-1.0/include;glib-2.0;lib/glib-2.0/include")
     ms2_target(GTK4 "${GTK4_DIRS}" "gtk-4;pangocairo-1.0;pango-1.0;gdk_pixbuf-2.0;cairo-gobject;cairo;harfbuzz;gobject-2.0;intl")
+    set(ADW_DIRS "libadwaita-1.0;${GTK4_DIRS}")
+    ms2_target(ADW "${ADW_DIRS}" "adwaita-1")
   endif()
   link_directories(${MS2_PREFIX}/lib)
 endif()
@@ -180,15 +184,12 @@ target_link_libraries(eclipse_config PUBLIC eclipse_core eclipse_security)
 
 # ============================================================= GUI
 if(ECLIPSE_BUILD_UI)
-  add_library(eclipse_ui STATIC ui/ui.c ui/term_page.c)
-  # GtkDialog-family APIs are deprecated since GTK 4.10 but still functional;
-  # Adwaita migration tracked separately (docs/ARCHITECTURE.md TODO).
-  target_compile_options(eclipse_ui PRIVATE -Wno-deprecated-declarations)
+  add_library(eclipse_ui STATIC ui/ui.c ui/term_page.c ui/panes.c)
   target_include_directories(eclipse_ui PUBLIC ui)
-target_link_libraries(eclipse_ui PUBLIC ec_includes)
+  target_link_libraries(eclipse_ui PUBLIC ec_includes)
   target_link_libraries(eclipse_ui PUBLIC
     eclipse_core eclipse_config eclipse_security eclipse_ssh eclipse_sftp
-    eclipse_terminal eclipse_forward eclipse_session ecdep::GTK4)
+    eclipse_terminal eclipse_forward eclipse_session ecdep::GTK4 ecdep::ADW)
 
   add_executable(eclipse-ssh app/main.c)
   target_link_libraries(eclipse-ssh PRIVATE eclipse_ui)

@@ -5,7 +5,7 @@
 | Component | Ubuntu/Debian package | MSYS2 (MINGW64) package |
 |---|---|---|
 | Build | build-essential, ninja-build, cmake, pkg-config | mingw-w64-x86_64-gcc, -cmake, -ninja |
-| UI (GTK4) | libgtk-4-dev | mingw-w64-x86_64-gtk4 |
+| UI (GTK4) | libgtk-4-dev, libadwaita-1-dev | mingw-w64-x86_64-gtk4, -libadwaita |
 | SSH | libssh-dev | mingw-w64-x86_64-libssh |
 | Terminal | libvterm-dev | mingw-w64-x86_64-libvterm |
 | Crypto | libssl-dev | mingw-w64-x86_64-openssl |
@@ -27,7 +27,7 @@ Options:
 ## Windows (MSYS2 MinGW64)
 
 ```bash
-pacman -S mingw-w64-x86_64-gtk4 mingw-w64-x86_64-libssh mingw-w64-x86_64-libvterm \
+pacman -S mingw-w64-x86_64-gtk4 mingw-w64-x86_64-libadwaita mingw-w64-x86_64-libssh mingw-w64-x86_64-libvterm \
   mingw-w64-x86_64-openssl mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j

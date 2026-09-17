@@ -23,6 +23,7 @@ struct EcTermPage {
     EcTerm* term;
     /* widgets */
     GtkWidget* root;        /* outer box */
+    GtkWidget* container;   /* notebook child hosting this pane's split group */
     GtkWidget* draw;        /* GtkDrawingArea */
     GtkWidget* scrollbar;
     GtkWidget* label;       /* tab label text */

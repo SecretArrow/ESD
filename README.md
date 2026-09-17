@@ -12,6 +12,7 @@ real tunneling.
 | Auth: password / key / agent | done |
 | Host-key verification (known_hosts, TOFU + change detection) | done |
 | Terminal (libvterm: ANSI/VT, 256c, truecolor, UTF-8, scrollback, mouse) | done |
+| Split-pane terminals (recursive H/V splits per tab) | done |
 | Sessions, groups, color tags, search-ready store | done |
 | SFTP + transfer queue (pause/resume/cancel/retry/rate-limit) | done |
 | Port forwarding L / R / SOCKS5 dynamic | done |

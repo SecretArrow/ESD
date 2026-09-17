@@ -1,0 +1,137 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Linux build + package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build ccache gcc pkg-config \
+            libgtk-4-dev libadwaita-1-dev libssh-dev libvterm-dev libssl-dev zlib1g-dev \
+            file
+
+      - name: Build (warnings are errors)
+        run: |
+          cmake -B build/rel -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/rel -j"$(nproc)"
+
+      - name: Unit tests
+        run: ctest --test-dir build/rel -R unit --output-on-failure
+
+      - name: Package (tgz + deb)
+        run: |
+          cd build/rel && cpack -G TGZ && cpack -G DEB
+          ls -la eclipse-ssh*.*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            build/rel/*.tar.gz
+            build/rel/*.deb
+          if-no-files-found: error
+
+  windows:
+    name: Windows build + package
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            git make ninja
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-gtk4
+            mingw-w64-x86_64-libadwaita
+            mingw-w64-x86_64-libssh
+            mingw-w64-x86_64-libvterm
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-zlib
+
+      - name: Build
+        run: |
+          export PKG_CONFIG_PATH="$(cygpath -m /mingw64/lib/pkgconfig):$(cygpath -m /mingw64/share/pkgconfig)"
+          cmake -B build/rel -G Ninja -DCMAKE_BUILD_TYPE=Release -DMS2_PREFIX="$(cygpath -m /mingw64)"
+          cmake --build build/rel -j"$(nproc)"
+
+      - name: Unit tests
+        run: ./build/rel/test_unit
+
+      - name: Package zip (portable)
+        run: |
+          mkdir -p dist/win64
+          cp build/rel/eclipse-ssh.exe build/rel/eclipse-ssh-cli.exe dist/win64/ 2>/dev/null || true
+          cd dist/win64
+          ldd eclipse-ssh.exe 2>/dev/null | awk '/=> \/mingw64/{print $3}' | xargs -r -I{} cp -n {} . || true
+          ldd eclipse-ssh-cli.exe 2>/dev/null | awk '/=> \/mingw64/{print $3}' | xargs -r -I{} cp -n {} . || true
+          mkdir -p share/glib-2.0/schemas
+          cp /mingw64/share/glib-2.0/schemas/gschemas.compiled share/glib-2.0/schemas/ 2>/dev/null || true
+          # GTK4 requires its schemas + loaders; copy minimal trees
+          cp -r /mingw64/lib/gtk-4.0 lib/ 2>/dev/null || true
+          # libadwaita ships its own icon/presets inside the dll; nothing extra needed
+          cd ..
+          7z a eclipse-ssh-windows-x86_64.zip win64 > /dev/null
+          ls -la
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-package
+          path: dist/eclipse-ssh-windows-x86_64.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: [linux, windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage release files
+        run: |
+          mkdir -p stage
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.deb" -o -name "*.zip" \) -exec cp {} stage/ \;
+          cd stage && sha256sum * > SHA256SUMS.txt
+          ls -la
+
+      - name: Create release + upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+                 --title "Eclipse SSH $GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" stage/* --repo "$GITHUB_REPOSITORY" --clobber
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets \
+            -q '.assets[].name'

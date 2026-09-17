@@ -1,4 +1,5 @@
-/* Eclipse SSH - GUI entry point (GTK4). */
+/* Eclipse SSH - GUI entry point (GTK4 + libadwaita dialogs). */
+#include <adwaita.h>
 #include <gtk/gtk.h>
 #include "eclipse/ui.h"
 #include "eclipse/platform.h"
@@ -114,6 +115,7 @@ static void action_palette(GSimpleAction* a, GVariant* v, gpointer user)
 
 int main(int argc, char** argv)
 {
+    adw_init(); /* libadwaita dialogs (GtkDialog family is deprecated) */
     /* ssh:// deep links: eclipse-ssh ssh://user@host:port (spec #53) */
     for (int i = 1; i < argc; i++) {
         if (g_str_has_prefix(argv[i], "ssh://")) {

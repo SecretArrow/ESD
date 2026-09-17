@@ -13,6 +13,16 @@
   return to the live view.
 - `Ctrl+Shift+P` opens the command palette: run snippets or raw commands.
 
+## Split panes
+Split the focused terminal to run several shells side by side inside one tab.
+Each pane opens its own connection using the same profile (separate login
+session, separate PTY).
+- `Ctrl+Shift+E` split right (side by side)
+- `Ctrl+Shift+O` split down (stacked)
+- `Ctrl+Shift+W` close the focused pane (closes the tab when it is the last)
+- The toolbar hosts the same actions (tab-new / view-more / window-close
+  icons). Splits nest recursively on the focused pane.
+
 ## SFTP / Transfers
 - Toolbar **folder** icon opens the dual-pane view. Select files, then
   upload/download. The queue supports pause/resume/cancel/retry and shows

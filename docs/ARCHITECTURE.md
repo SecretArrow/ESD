@@ -4,7 +4,8 @@ Eclipse SSH is C11 with strict module boundaries. The UI never touches crypto
 primitives or libssh directly; it goes through the session orchestration layer.
 
 ```
-ui/ (GTK4)            dialogs, terminal widget (libvterm render), SFTP panes
+ui/ (GTK4 + libadwaita)  dialogs (AdwDialog family), terminal widget (libvterm
+                         render), split-pane groups, SFTP panes
   |
 ssh/session.c         worker threads: connect, pty pump, keepalive, reconnect
   |          \

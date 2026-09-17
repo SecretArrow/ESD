@@ -229,9 +229,10 @@ static gboolean on_key(GtkEventControllerKey* ctrl, guint keyval, guint keycode,
     (void)keycode;
     EcTermPage* p = user;
 
-    /* app-level shortcuts first */
+    /* app-level shortcuts first (case-insensitive: Shift uppercases keyvals) */
     if ((state & GDK_CONTROL_MASK) && (state & GDK_SHIFT_MASK)) {
-        if (keyval == GDK_KEY_C && p->has_selection) {
+        guint lv = gdk_keyval_to_lower(keyval);
+        if (lv == GDK_KEY_c && p->has_selection) {
             GdkClipboard* cb = gtk_widget_get_clipboard(p->draw);
             EcStr sel;
             ec_str_init(&sel);
@@ -255,12 +256,24 @@ static gboolean on_key(GtkEventControllerKey* ctrl, guint keyval, guint keycode,
             ec_str_free(&sel);
             return TRUE;
         }
-        if (keyval == GDK_KEY_V) {
+        if (lv == GDK_KEY_v) {
             ui_term_page_paste_from_clipboard(p);
             return TRUE;
         }
-        if (keyval == GDK_KEY_p) {
+        if (lv == GDK_KEY_p) {
             ui_palette_toggle(p->app);
+            return TRUE;
+        }
+        if (lv == GDK_KEY_e) {
+            ui_split_pane(p, false); /* right */
+            return TRUE;
+        }
+        if (lv == GDK_KEY_o) {
+            ui_split_pane(p, true); /* down */
+            return TRUE;
+        }
+        if (lv == GDK_KEY_w) {
+            ui_close_pane(p);
             return TRUE;
         }
     }
@@ -366,6 +379,7 @@ static void on_click(GtkGestureClick* g, int n_press, double x, double y, gpoint
 {
     (void)n_press;
     EcTermPage* p = user;
+    ui_note_focus(p); /* remember focused pane for split/palette actions */
     gtk_widget_grab_focus(p->draw);
     guint button = gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(g));
     int row, col;
