@@ -76,11 +76,11 @@ typedef struct {
 #ifdef _WIN32
 typedef SOCKET ECRawSock;
 #define EC_RECV(s,b,n) recv(s,b,n,0)
-#define EC_SEND(s,b,n) send(s,b,n,0)
+#define EC_SEND(s,b,n) send(s,b,(int)(n),0)
 #else
 typedef int ECRawSock;
 #define EC_RECV(s,b,n) recv(s,b,n,0)
-#define EC_SEND(s,b,n) send(s,b,n,0)
+#define EC_SEND(s,b,n) send(s,b,(size_t)(n),0)
 #endif
 
 static gpointer pair_poll_thread(gpointer data)
@@ -110,8 +110,8 @@ static gpointer pair_poll_thread(gpointer data)
         int m = ssh_channel_read_nonblocking(p->channel, buf, sizeof buf, 0);
         if (m > 0) {
             ssize_t off = 0;
-            while (off < (size_t)m) {
-                ssize_t w = (ssize_t)EC_SEND(lfd, buf + off, (size_t)m - off);
+            while (off < m) {
+                ssize_t w = (ssize_t)EC_SEND(lfd, buf + off, m - off);
                 if (w <= 0) {
 #ifdef _WIN32
                     int err = WSAGetLastError();
