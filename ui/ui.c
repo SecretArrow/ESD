@@ -157,6 +157,11 @@ void ui_sidebar_refresh(EcApp* app)
         if (!row) break;
         gtk_list_box_remove(list, GTK_WIDGET(row));
     }
+    /* per-color rules for session dots go into ONE display-wide provider
+     * (per-widget GtkStyleContext providers are deprecated since 4.10) */
+    char css[1024];
+    size_t off = 0;
+    css[0] = 0;
     for (size_t i = 0; i < app->sessions.sessions.len; i++) {
         EcSession* s = app->sessions.sessions.items[i];
         GtkWidget* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
@@ -164,15 +169,14 @@ void ui_sidebar_refresh(EcApp* app)
         gtk_widget_add_css_class(dot, "session-dot");
         uint8_t r = 0x8a, g = 0x8a, b = 0x8a;
         sscanf(s->color, "#%02hhx%02hhx%02hhx", &r, &g, &b);
-        char* css = g_strdup_printf("label.session-dot { background: #%02x%02x%02x; }", r, g, b);
-        GtkCssProvider* prov = gtk_css_provider_new();
-        gtk_css_provider_load_from_string(prov, css);
-        gtk_style_context_add_provider(gtk_widget_get_style_context(dot),
-                                       GTK_STYLE_PROVIDER(prov), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-        g_object_unref(prov);
-        g_free(css);
-        char label[256];
-        snprintf(label, sizeof label, "%s%s", s->name, s->group[0] ? "" : "");
+        char dotclass[32];
+        snprintf(dotclass, sizeof dotclass, "sdot-%02x%02x%02x", r, g, b);
+        gtk_widget_add_css_class(dot, dotclass);
+        if (!off || !strstr(css, dotclass)) {
+            int n = snprintf(css + off, sizeof css - off,
+                             ".%s { background: #%02x%02x%02x; }\n", dotclass, r, g, b);
+            if (n > 0 && off + (size_t)n < sizeof css) off += (size_t)n;
+        }
         GtkWidget* name = gtk_label_new(s->name);
         gtk_label_set_xalign(GTK_LABEL(name), 0.0);
         gtk_widget_set_hexpand(name, TRUE);
@@ -186,6 +190,18 @@ void ui_sidebar_refresh(EcApp* app)
         g_object_set_data_full(G_OBJECT(roww), "ec-siderow", sr, g_free);
         gtk_list_box_append(list, roww);
     }
+    /* swap in a fresh display provider carrying the current dot colors */
+    static GtkCssProvider* sdot_provider = NULL;
+    GdkDisplay* disp = gdk_display_get_default();
+    GtkCssProvider* prov = gtk_css_provider_new();
+    gtk_css_provider_load_from_string(prov, css);
+    gtk_style_context_add_provider_for_display(disp, GTK_STYLE_PROVIDER(prov),
+                                               GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    if (sdot_provider) {
+        gtk_style_context_remove_provider_for_display(disp, GTK_STYLE_PROVIDER(sdot_provider));
+        g_object_unref(sdot_provider);
+    }
+    sdot_provider = prov;
 }
 
 /* ============================================================ host key dialog */
@@ -229,7 +245,7 @@ static gboolean hk_show_idle(gpointer user)
     snprintf(body, sizeof body,
              "%s\n\nHost: %s:%d\nKey type: %s\nFingerprint: %s\n\nAccept this host key?",
              warn, ctx->host, ctx->port, ctx->key.type ? ctx->key.type : "?", fp);
-    AdwDialog* dlg = adw_message_dialog_new(ctx->app->main_window, heading, body);
+    AdwDialog* dlg = ADW_DIALOG(adw_message_dialog_new(ctx->app->main_window, heading, body));
     AdwMessageDialog* md = ADW_MESSAGE_DIALOG(dlg);
     adw_message_dialog_add_response(md, "reject", "Reject");
     adw_message_dialog_add_response(md, "once", "Accept once");
@@ -337,7 +353,7 @@ void ui_prompt_password(EcApp* app, const char* title, void (*done)(const char* 
     GtkWidget* hb = adw_header_bar_new();
     GtkWidget* cancel = gtk_button_new_with_label("Cancel");
     GtkWidget* ok = gtk_button_new_with_label("OK");
-    gtk_button_set_css_class(GTK_BUTTON(ok), "suggested-action");
+    gtk_widget_add_css_class(ok, "suggested-action");
     g_signal_connect(cancel, "clicked", G_CALLBACK(pw_cancel), dlg);
     g_signal_connect(ok, "clicked", G_CALLBACK(pw_ok), dlg);
     adw_header_bar_pack_start(ADW_HEADER_BAR(hb), cancel);
@@ -379,22 +395,22 @@ static void connect_apply(GtkButton* b, gpointer user)
     GtkEntry* e_host = g_object_get_data(G_OBJECT(dlg), "e-host");
     GtkEntry* e_port = g_object_get_data(G_OBJECT(dlg), "e-port");
     GtkEntry* e_user = g_object_get_data(G_OBJECT(dlg), "e-user");
-    GtkComboBoxText* c_auth = g_object_get_data(G_OBJECT(dlg), "c-auth");
+    GtkDropDown* c_auth = g_object_get_data(G_OBJECT(dlg), "c-auth");
     GtkEntry* e_pass = g_object_get_data(G_OBJECT(dlg), "e-pass");
     GtkEntry* e_key = g_object_get_data(G_OBJECT(dlg), "e-key");
-    GtkComboBoxText* c_color = g_object_get_data(G_OBJECT(dlg), "c-color");
+    GtkDropDown* c_color = g_object_get_data(G_OBJECT(dlg), "c-color");
     GtkTextView* t_init = g_object_get_data(G_OBJECT(dlg), "t-init");
     snprintf(s->name, sizeof s->name, "%s", gtk_editable_get_text(GTK_EDITABLE(e_name)));
     snprintf(s->host, sizeof s->host, "%s", gtk_editable_get_text(GTK_EDITABLE(e_host)));
     s->port = atoi(gtk_editable_get_text(GTK_EDITABLE(e_port)));
     if (!ec_valid_port(s->port)) s->port = 22;
     snprintf(s->username, sizeof s->username, "%s", gtk_editable_get_text(GTK_EDITABLE(e_user)));
-    int am = gtk_combo_box_get_active(GTK_COMBO_BOX(c_auth));
+    int am = (int)gtk_drop_down_get_selected(c_auth);
     s->auth_mode = am == 0 ? EC_AUTH_PASSWORD : am == 1 ? EC_AUTH_KEY : EC_AUTH_AGENT;
     snprintf(s->key_path, sizeof s->key_path, "%s", gtk_editable_get_text(GTK_EDITABLE(e_key)));
-    const char* color = gtk_combo_box_text_get_active_text(c_color);
+    GtkStringObject* so = GTK_STRING_OBJECT(gtk_drop_down_get_selected_item(c_color));
+    const char* color = so ? gtk_string_object_get_string(so) : NULL;
     snprintf(s->color, sizeof s->color, "%s", color ? color : "#4f8cff");
-    g_free((gpointer)color);
     GtkTextBuffer* tb = gtk_text_view_get_buffer(t_init);
     GtkTextIter a, b2;
     gtk_text_buffer_get_bounds(tb, &a, &b2);
@@ -430,7 +446,7 @@ void ui_show_connect_dialog(EcApp* app, EcSession* existing)
     GtkWidget* hb = adw_header_bar_new();
     GtkWidget* cancel = gtk_button_new_with_label("Cancel");
     GtkWidget* ok = gtk_button_new_with_label("Connect");
-    gtk_button_set_css_class(GTK_BUTTON(ok), "suggested-action");
+    gtk_widget_add_css_class(ok, "suggested-action");
     g_signal_connect(cancel, "clicked", G_CALLBACK(connect_cancel), dlg);
     g_signal_connect(ok, "clicked", G_CALLBACK(connect_apply), dlg);
     adw_header_bar_pack_start(ADW_HEADER_BAR(hb), cancel);
@@ -439,27 +455,26 @@ void ui_show_connect_dialog(EcApp* app, EcSession* existing)
 
     GtkWidget* scroll = gtk_scrolled_window_new();
     GtkWidget* grid = gtk_grid_new();
+    int row = 0;
+    GtkWidget* lbl;
+#define ADD_ROW(label, w) (lbl = gtk_label_new(label), gtk_label_set_xalign(GTK_LABEL(lbl), 0.0), \
+    gtk_grid_attach(GTK_GRID(grid), lbl, 0, row, 1, 1), \
+    gtk_grid_attach(GTK_GRID(grid), w, 1, row, 1, 1), gtk_widget_set_hexpand(w, TRUE), row++)
     GtkWidget* e_name = gtk_entry_new();
     GtkWidget* e_host = gtk_entry_new();
     GtkWidget* e_port = gtk_entry_new();
     gtk_editable_set_text(GTK_EDITABLE(e_port), "22");
     GtkWidget* e_user = gtk_entry_new();
-    GtkWidget* c_auth = gtk_combo_box_text_new();
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(c_auth), "Password");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(c_auth), "Private key");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(c_auth), "Agent");
-    gtk_combo_box_set_active(GTK_COMBO_BOX(c_auth), 0);
+    GtkWidget* c_auth = gtk_drop_down_new_from_strings(
+        (const char* const[]){ "Password", "Private key", "Agent", NULL });
+    gtk_drop_down_set_selected(GTK_DROP_DOWN(c_auth), 0);
     GtkWidget* e_pass = gtk_password_entry_new();
     gtk_password_entry_set_show_peek_icon(GTK_PASSWORD_ENTRY(e_pass), TRUE);
     GtkWidget* e_key = gtk_entry_new();
     gtk_widget_set_tooltip_text(e_key, "Path to OpenSSH private key");
-    GtkWidget* c_color = gtk_combo_box_text_new();
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(c_color), "#e5484d");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(c_color), "#e5b567");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(c_color), "#46a758");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(c_color), "#4f8cff");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(c_color), "#9d59e5");
-    gtk_combo_box_set_active(GTK_COMBO_BOX(c_color), 3);
+    GtkWidget* c_color = gtk_drop_down_new_from_strings(
+        (const char* const[]){ "#e5484d", "#e5b567", "#46a758", "#4f8cff", "#9d59e5", NULL });
+    gtk_drop_down_set_selected(GTK_DROP_DOWN(c_color), 3);
     GtkWidget* scroll2 = gtk_scrolled_window_new();
     GtkWidget* t_init = gtk_text_view_new();
     gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(t_init), GTK_WRAP_WORD_CHAR);
@@ -491,18 +506,8 @@ void ui_show_connect_dialog(EcApp* app, EcSession* existing)
         snprintf(port, sizeof port, "%d", existing->port);
         gtk_editable_set_text(GTK_EDITABLE(e_port), port);
         gtk_editable_set_text(GTK_EDITABLE(e_user), existing->username);
-        gtk_combo_box_set_active(GTK_COMBO_BOX(c_auth), (int)existing->auth_mode);
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(c_auth), (guint)existing->auth_mode);
         gtk_editable_set_text(GTK_EDITABLE(e_key), existing->key_path);
-        if (existing->color[0]) {
-            GtkStringList* dummy = NULL;
-            (void)dummy;
-            /* select matching color if present */
-            for (int i = 0; i < 5; i++) {
-                const char* cand = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(c_color));
-                g_free((gpointer)cand);
-                break;
-            }
-        }
         GtkTextBuffer* tb = gtk_text_view_get_buffer(GTK_TEXT_VIEW(t_init));
         gtk_text_buffer_set_text(tb, existing->init_commands, -1);
     }
@@ -523,8 +528,8 @@ void ui_show_connect_dialog(EcApp* app, EcSession* existing)
 /* ============================================================ error/about */
 void ui_show_error(EcApp* app, const char* title, const char* message)
 {
-    AdwDialog* dlg = adw_message_dialog_new(app->main_window, title,
-                                            message ? message : title);
+    AdwDialog* dlg = ADW_DIALOG(adw_message_dialog_new(app->main_window, title,
+                                                       message ? message : title));
     AdwMessageDialog* md = ADW_MESSAGE_DIALOG(dlg);
     adw_message_dialog_add_response(md, "close", "Close");
     adw_message_dialog_set_default_response(md, "close");
