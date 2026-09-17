@@ -21,8 +21,13 @@
 #include "eclipse/platform.h"
 
 #include <gio/gio.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <sys/select.h>
 #include <unistd.h>
+#endif
 
 static int g_exit_code = 0;
 
