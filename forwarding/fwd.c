@@ -73,16 +73,26 @@ typedef struct {
 } FwdPair;
 
 /* local socket -> channel pump uses polling on a nonblocking socket */
+#ifdef _WIN32
+typedef SOCKET ECRawSock;
+#define EC_RECV(s,b,n) recv(s,b,n,0)
+#define EC_SEND(s,b,n) send(s,b,n,0)
+#else
+typedef int ECRawSock;
+#define EC_RECV(s,b,n) recv(s,b,n,0)
+#define EC_SEND(s,b,n) send(s,b,n,0)
+#endif
+
 static gpointer pair_poll_thread(gpointer data)
 {
     FwdPair* p = data;
     GSocket* sock = g_socket_connection_get_socket(p->conn);
-    int lfd = g_socket_get_fd(sock);
+    ECRawSock lfd = (ECRawSock)g_socket_get_fd(sock);
     char buf[16384];
     while (!p->stop) {
         /* drain local -> ssh (nonblocking reads on socket via MSG_DONTWAIT not portable here;
          * instead set socket nonblocking) */
-        gssize n = recv(lfd, buf, sizeof buf, 0);
+        gssize n = (gssize)EC_RECV(lfd, buf, sizeof buf);
         if (n > 0) {
             ssize_t w = ssh_channel_write(p->channel, buf, (uint32_t)n);
             if (w <= 0) break;
@@ -101,7 +111,7 @@ static gpointer pair_poll_thread(gpointer data)
         if (m > 0) {
             ssize_t off = 0;
             while (off < m) {
-                ssize_t w = send(lfd, buf + off, (size_t)(m - off), 0);
+                ssize_t w = (ssize_t)EC_SEND(lfd, buf + off, (size_t)(m - off));
                 if (w <= 0) {
 #ifdef _WIN32
                     int err = WSAGetLastError();
