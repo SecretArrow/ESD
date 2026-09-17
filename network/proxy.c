@@ -53,7 +53,7 @@ int ec_proxy_dial(const EcProxy* px, const char* dest_host, int dest_port,
     GError* ge = NULL;
     if (timeout_ms <= 0) timeout_ms = 15000;
     GSocketClient* client = g_socket_client_new();
-    g_socket_client_set_timeout(client, timeout_ms / 1000 + 1);
+    g_socket_client_set_timeout(client, (guint)(timeout_ms / 1000 + 1));
     char target[300];
     snprintf(target, sizeof target, "%s:%d", px->host, px->port);
     GSocketConnection* conn = g_socket_client_connect_to_host(client, target, (guint16)px->port, NULL, &ge);
@@ -69,8 +69,9 @@ int ec_proxy_dial(const EcProxy* px, const char* dest_host, int dest_port,
     if (px->kind == EC_PROXY_SOCKS5) {
         bool have_auth = px->user[0] != '\0';
         unsigned char hs[4] = { 5, have_auth ? 2u : 1u, 0, have_auth ? 2u : 0u };
-        size_t hslen = have_auth ? 4 : 3;
+        guint hslen = have_auth ? 4u : 3u;
         ok = g_socket_send(sock, (gpointer)hs, hslen, NULL, &ge) == (gssize)hslen;
+        (void)0;
         if (ok) ok = g_socket_receive(sock, buf, 2, NULL, &ge) == 2 && (unsigned char)buf[0] == 5;
         if (ok && have_auth && (unsigned char)buf[1] == 2) {
             size_t ul = strlen(px->user), pl = strlen(px->pass);

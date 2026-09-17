@@ -41,7 +41,7 @@ char* ec_ssh_key_fingerprint_b64(ssh_key key)
         for (const char* p = blob_b64; *p && *p != '='; p++) {
             int8_t v = rev[(unsigned char)*p];
             if (v < 0) continue;
-            acc = (acc << 6) | (uint32_t)v;
+            acc = (acc << 6) | (uint32_t)(uint8_t)v;
             nbits += 6;
             if (nbits >= 8) {
                 nbits -= 8;
@@ -363,12 +363,16 @@ bool ec_ssh_chan_eof(EcSshChannel* c)
 int ec_ssh_chan_exit_status(EcSshChannel* c)
 {
     if (!c || !c->ch) return -1;
+#if defined(LIBSSH_VERSION_MAJOR) && (LIBSSH_VERSION_MAJOR > 0 || LIBSSH_VERSION_MINOR >= 11)
     uint32_t code = 0;
     char* sig = NULL;
     int core = 0;
     if (ssh_channel_get_exit_state(c->ch, &code, &sig, &core) != SSH_OK) return -1;
     if (sig) ssh_string_free_char(sig);
     return (int)code;
+#else
+    return ssh_channel_get_exit_status(c->ch);
+#endif
 }
 
 bool ec_ssh_wait_readable(EcSshChannel* c, int timeout_ms)

@@ -160,7 +160,7 @@ static gpointer connect_worker(gpointer data)
         }
 
         ls->state = attempt == 0 ? EC_LV_CONNECTING : EC_LV_RECONNECTING;
-        snprintf(ls->status, sizeof ls->status, "Connecting to %s:%d...", ls->profile.host, ls->profile.port);
+        snprintf(ls->status, sizeof ls->status, "Connecting to %.200s:%d...", ls->profile.host, ls->profile.port);
         ls->cb.state(ls, ls->state, ls->status, ls->cb.user);
 
         EcSshParams p = { 0 };

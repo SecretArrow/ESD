@@ -23,14 +23,14 @@ static void on_output(const char* s, size_t len, void* user)
 
 static void sb_clear(EcTerm* t)
 {
-    for (int i = 0; i < t->sb_len; i++) free(t->sb[(t->sb_start + i) % (size_t)t->sb_cap]);
+    for (int i = 0; i < t->sb_len; i++) free(t->sb[(size_t)((t->sb_start + i) % t->sb_cap)]);
     t->sb_len = 0;
     t->sb_start = 0;
 }
 
 static EcTermCell* sb_line_at(EcTerm* t, int idx)
 {
-    return t->sb[(t->sb_start + idx) % (size_t)t->sb_cap];
+    return t->sb[(size_t)((t->sb_start + idx) % t->sb_cap)];
 }
 
 static int sb_pushline(int cols, const VTermScreenCell* cells, void* user)
@@ -38,10 +38,10 @@ static int sb_pushline(int cols, const VTermScreenCell* cells, void* user)
     EcTerm* t = user;
     if (t->sb_len == t->sb_cap) { /* drop oldest */
         free(t->sb[t->sb_start]);
-        t->sb_start = (t->sb_start + 1) % (size_t)t->sb_cap;
+        t->sb_start = (t->sb_start + 1) % t->sb_cap;
         t->sb_len--;
     }
-    EcTermCell* line = calloc((size_t)cols, sizeof(EcTermCell));
+    EcTermCell* line = calloc(cols > 0 ? (size_t)cols : 1u, sizeof(EcTermCell));
     if (!line) return 0;
     for (int i = 0; i < cols; i++) {
         line[i].ch = cells[i].chars[0];
@@ -52,7 +52,7 @@ static int sb_pushline(int cols, const VTermScreenCell* cells, void* user)
         line[i].underline = cells[i].attrs.underline;
         line[i].reverse = cells[i].attrs.reverse;
     }
-    t->sb[(t->sb_start + t->sb_len) % (size_t)t->sb_cap] = line;
+    t->sb[(size_t)((t->sb_start + t->sb_len) % t->sb_cap)] = line;
     t->sb_len++;
     if (t->sb_offset > 0) t->sb_offset++; /* keep view pinned when scrolled up */
     return 1;
@@ -62,7 +62,7 @@ static int sb_popline(int cols, VTermScreenCell* cells, void* user)
 {
     EcTerm* t = user;
     if (t->sb_len == 0) return 0;
-    int last = (t->sb_start + t->sb_len - 1) % (size_t)t->sb_cap;
+    int last = (t->sb_start + t->sb_len - 1) % t->sb_cap;
     EcTermCell* line = t->sb[last];
     if (t->sb_offset > 0) t->sb_offset--;
     for (int i = 0; i < cols; i++) {

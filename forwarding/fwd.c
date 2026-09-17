@@ -429,7 +429,7 @@ bool ec_fwd_stop(EcFwdManager* m, int index)
         char port[16];
         snprintf(port, sizeof port, "%d", r->rule.bind_port);
         GSocketClient* c = g_socket_client_new();
-        GSocketConnection* self = g_socket_client_connect_to_host(c, "127.0.0.1", r->rule.bind_port, NULL, NULL);
+        GSocketConnection* self = g_socket_client_connect_to_host(c, "127.0.0.1", (guint16)r->rule.bind_port, NULL, NULL);
         if (self) g_object_unref(self);
         g_object_unref(c);
         g_thread_join(r->thread);

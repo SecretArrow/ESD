@@ -276,13 +276,13 @@ bool ec_sftp_upload_file(EcTransfer* t)
     if (!ec_file_size(t->local_path, &t->total)) t->total = 0;
     FILE* local = ec_fopen(t->local_path, "rb");
     if (!local) {
-        snprintf(t->error, sizeof t->error, "Cannot open local file: %s", t->local_path);
+        snprintf(t->error, sizeof t->error, "Cannot open local file: %.200s", t->local_path);
         t->state = EC_TR_ERROR;
         return false;
     }
     sftp_file rf = sftp_open(t->sftp->sftp, t->remote_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (!rf) {
-        snprintf(t->error, sizeof t->error, "Cannot open remote file: %s (%s)", t->remote_path, ec_sftp_last_error(t->sftp));
+        snprintf(t->error, sizeof t->error, "Cannot open remote file: %.120s (%.80s)", t->remote_path, ec_sftp_last_error(t->sftp));
         t->state = EC_TR_ERROR;
         fclose(local);
         return false;
@@ -302,13 +302,13 @@ bool ec_sftp_download_file(EcTransfer* t)
     if (a) sftp_attributes_free(a);
     sftp_file rf = sftp_open(t->sftp->sftp, t->remote_path, O_RDONLY, 0);
     if (!rf) {
-        snprintf(t->error, sizeof t->error, "Cannot open remote file: %s (%s)", t->remote_path, ec_sftp_last_error(t->sftp));
+        snprintf(t->error, sizeof t->error, "Cannot open remote file: %.120s (%.80s)", t->remote_path, ec_sftp_last_error(t->sftp));
         t->state = EC_TR_ERROR;
         return false;
     }
     FILE* local = ec_fopen(t->local_path, "wb");
     if (!local) {
-        snprintf(t->error, sizeof t->error, "Cannot write local file: %s", t->local_path);
+        snprintf(t->error, sizeof t->error, "Cannot write local file: %.200s", t->local_path);
         t->state = EC_TR_ERROR;
         sftp_close(rf);
         return false;
