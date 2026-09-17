@@ -114,6 +114,7 @@ jobs:
 
       - name: Build
         run: |
+          export PKG_CONFIG_PATH="$(cygpath -m /mingw64/lib/pkgconfig):$(cygpath -m /mingw64/share/pkgconfig)"
           cmake -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build build/ci -j"$(nproc)"
 

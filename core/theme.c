@@ -88,9 +88,10 @@ bool ec_theme_load_json(const char* json, EcTheme* out)
     cJSON* name_j = cJSON_GetObjectItem(root, "name");
     cJSON* app_j = cJSON_GetObjectItem(root, "appearance");
     cJSON* colors = cJSON_GetObjectItem(root, "colors");
-    snprintf(out->name, sizeof out->name, cJSON_IsString(name_j) ? name_j->valuestring : "Custom");
-    snprintf(out->appearance, sizeof out->appearance,
-             cJSON_IsString(app_j) && app_j->valuestring ? app_j->valuestring : "dark");
+    snprintf(out->name, sizeof out->name, "%s",
+             (cJSON_IsString(name_j) && name_j->valuestring) ? name_j->valuestring : "Custom");
+    snprintf(out->appearance, sizeof out->appearance, "%s",
+             (cJSON_IsString(app_j) && app_j->valuestring) ? app_j->valuestring : "dark");
     if (strcmp(out->appearance, "light") != 0 && strcmp(out->appearance, "dark") != 0)
         snprintf(out->appearance, sizeof out->appearance, "dark");
     theme_defaults_for_appearance(out);
