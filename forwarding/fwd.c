@@ -110,8 +110,8 @@ static gpointer pair_poll_thread(gpointer data)
         int m = ssh_channel_read_nonblocking(p->channel, buf, sizeof buf, 0);
         if (m > 0) {
             ssize_t off = 0;
-            while (off < m) {
-                ssize_t w = (ssize_t)EC_SEND(lfd, buf + off, (size_t)(m - off));
+            while (off < (size_t)m) {
+                ssize_t w = (ssize_t)EC_SEND(lfd, buf + off, (size_t)m - off);
                 if (w <= 0) {
 #ifdef _WIN32
                     int err = WSAGetLastError();

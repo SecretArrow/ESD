@@ -313,7 +313,7 @@ int ec_live_run_automation(EcLiveSession* ls)
             ec_live_send(ls, "\r", 1);
             sent++;
             if (ls->profile.init_delay_ms > 0)
-                g_usleep((guint64)ls->profile.init_delay_ms * 1000);
+                g_usleep((gulong)ls->profile.init_delay_ms * 1000u);
         }
         p = nl ? nl + 1 : NULL;
     }
