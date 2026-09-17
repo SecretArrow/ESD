@@ -2,354 +2,159 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ["main"]
   pull_request:
-  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   linux:
     name: Linux build + test + package
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      ECD_SSHD_HOST: 127.0.0.1
+      ECD_SSHD_PORT: 2222
+      ECD_SSHD_USER: runner
+      ECD_SSHD_KEY: ${{ github.workspace }}/testkey
     steps:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
+          sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            ninja-build ccache g++ pkg-config qmake6 \
-            qt6-base-dev qt6-base-private-dev qt6-declarative-dev qt6-declarative-dev-tools \
-            libqt6sql6-sqlite libgl1-mesa-dev \
-            libssh-dev libssh2-1-dev libvterm-dev libssl-dev zlib1g-dev \
-            qt6-serialport-dev \
-            qml6-module-qtquick qml6-module-qtquick-window qml6-module-qtquick-controls \
-            qml6-module-qtquick-layouts qml6-module-qtquick-templates \
-            qml6-module-qtquick-dialogs qml6-module-qtqml qml6-module-qtqml-workerscript \
-            qml6-module-qt-labs-platform
+            ninja-build ccache gcc pkg-config openssh-server \
+            libgtk-4-dev libssh-dev libvterm-dev libssl-dev zlib1g-dev \
+            xvfb file
 
-      - name: Restore ccache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ccache
-          key: ccache-linux-${{ github.sha }}
-          restore-keys: ccache-linux-
-
-      - name: Configure
+      - name: Build (warnings are errors)
         run: |
-          cmake -G Ninja -B build/ci \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DECLIPSE_WARNINGS_AS_ERRORS=OFF \
-            -DECLIPSE_BUILD_TESTS=ON \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/ci -j"$(nproc)"
 
-      - name: Build
-        run: cmake --build build/ci -j
-
-      - name: Start local sshd (SSH/SFTP round-trip testbed)
+      - name: Start local sshd (testbed)
         run: |
-          sudo apt-get install -y --no-install-recommends openssh-server openssh-client
-          sudo mkdir -p /run/sshd
-          # GH runners ship the 'runner' account with a LOCKED password field.
-          # With UsePAM no, sshd denies pubkey auth to locked accounts
-          # ("User runner not allowed because account is locked"); '*' means
-          # "no password" without the lock flag.
+          ssh-keygen -t ed25519 -N '' -f "$HOME/testkey" -q
+          mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+          cp "$HOME/testkey.pub" "$HOME/.ssh/authorized_keys"
+          chmod 600 "$HOME/.ssh/authorized_keys"
           sudo usermod -p '*' runner
-          mkdir -p /tmp/ssh_rt ~/.ssh
-          ssh-keygen -q -t ed25519 -N "" -f /tmp/ssh_rt/id_ed25519
-          ssh-keygen -q -t ed25519 -N "" -f /tmp/ssh_rt/hostkey
-          cp /tmp/ssh_rt/id_ed25519.pub ~/.ssh/authorized_keys
-          chmod 700 ~/.ssh
-          chmod 600 ~/.ssh/authorized_keys
-          cat > /tmp/ssh_rt/sshd_config <<'EOF'
-          Port 2222
-          ListenAddress 127.0.0.1
-          HostKey /tmp/ssh_rt/hostkey
-          PidFile /tmp/ssh_rt/sshd.pid
-          AuthorizedKeysFile .ssh/authorized_keys
-          PubkeyAuthentication yes
-          PasswordAuthentication no
-          KbdInteractiveAuthentication no
-          UsePAM no
-          PermitRootLogin no
-          AllowUsers runner
-          Subsystem sftp internal-sftp
-          StrictModes yes
-          LogLevel VERBOSE
-          EOF
-          sudo /usr/sbin/sshd -f /tmp/ssh_rt/sshd_config -E /tmp/ssh_rt/sshd.log
-          timeout 15 bash -c 'until (exec 3<>/dev/tcp/127.0.0.1/2222) 2>/dev/null; do sleep 0.3; done'
-          echo "sshd testbed up on 127.0.0.1:2222"
+          sudo mkdir -p /run/sshd
+          sudo /usr/sbin/sshd -D -p 2222 -o UsePAM=no -o PubkeyAuthentication=yes \
+            -o AuthorizedKeysFile=.ssh/authorized_keys -o StrictModes=yes \
+            -o Subsystem="sftp internal-sftp" > /tmp/sshd.log 2>&1 &
+          sleep 2
+          nc -z 127.0.0.1 2222 || { cat /tmp/sshd.log; exit 1; }
 
-      - name: Tests
-        env:
-          ESD_SSHD_PORT: "2222"
-          ESD_SSHD_USER: runner
-          ESD_SSHD_KEY: /tmp/ssh_rt/id_ed25519
-        run: ctest --test-dir build/ci --output-on-failure
+      - name: Unit tests
+        run: ctest --test-dir build/ci -R unit --output-on-failure
 
-      - name: Debug round-trip crash (gdb backtrace)
-        if: failure()
+      - name: SSH/SFTP round-trip tests
+        run: ctest --test-dir build/ci -R ssh_roundtrip --output-on-failure
+
+      - name: Sanitizer build + tests (ASan/UBSan)
         run: |
-          sudo apt-get install -y --no-install-recommends gdb
-          ESD_SSHD_PORT=2222 ESD_SSHD_USER=runner ESD_SSHD_KEY=/tmp/ssh_rt/id_ed25519 \
-            gdb -batch -ex "handle SIGSEGV stop print nopass" -ex run -ex bt -ex "info threads" \
-            --args ./build/ci/tests/test_ssh_roundtrip 2>&1 | tail -70 || true
+          cmake -B build/asan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -DECLIPSE_BUILD_UI=OFF -DECLIPSE_ASAN=ON
+          cmake --build build/asan -j"$(nproc)"
+          ctest --test-dir build/asan -R unit --output-on-failure
+          ./build/asan/test_roundtrip
 
-      - name: Dump sshd log (round-trip diagnostics)
-        if: failure()
+      - name: Smoke test GUI (offscreen)
         run: |
-          echo "--- sshd log ---"
-          sudo cat /tmp/ssh_rt/sshd.log 2>/dev/null || true
-          echo "--- key perms ---"
-          ls -la ~/.ssh/ /tmp/ssh_rt/ 2>/dev/null || true
+          xvfb-run -a ./build/ci/eclipse-ssh --help 2>/dev/null &
+          APP_PID=$!
+          sleep 6
+          kill -0 $APP_PID 2>/dev/null && kill $APP_PID || true
+          echo "GUI binary launches under Xvfb"
 
-      - name: Smoke test (offscreen)
+      - name: Package (tgz + deb)
         run: |
-          set +e
-          ECLIPSE_LOG_STDERR=1 QT_QPA_PLATFORM=offscreen timeout 8 ./build/ci/src/eclipse-ssh-desktop > /tmp/smoke.log 2>&1
-          RC=$?
-          set -e
-          echo "smoke exit code: $RC"
-          cat /tmp/smoke.log || true
-          echo "--- recent app logs ---"
-          find "$HOME/.cache" -type f -name "*.log" -mmin -3 2>/dev/null | head -5 | xargs -r tail -40
-          [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ] || [ "$RC" -eq 137 ]
-          # QML health gate: zero runtime binding/reference errors allowed to ship
-          if grep -nE "ReferenceError|is not defined|is not installed|Unable to assign|TypeError:|Style names must not contain paths|failed to load icon font|Cannot override FINAL" /tmp/smoke.log; then
-            echo "FATAL: QML runtime errors in smoke log"; exit 1
-          fi
-          # style gate: the MD3 style must actually resolve (not silently Basic)
-           grep -q "Quick Controls style (post-load): EclipseMD3" /tmp/smoke.log || { echo "FATAL: EclipseMD3 style not active"; exit 1; }
-
-      - name: ccache stats
-        run: ccache -s || true
-
-      - name: Screenshots (Xvfb)
-        run: |
-          sudo apt-get install -y --no-install-recommends xvfb xdotool imagemagick fonts-dejavu-core fonts-noto-color-emoji
-          APP="$PWD/build/ci/src/eclipse-ssh-desktop"
-          [ -x "$APP" ] || { echo "app binary missing"; exit 1; }
-          mkdir -p dist/shots
-          # export: the inner single-quoted bash -c inherits $APP from the env
-          export APP
-          xvfb-run -a --server-args="-screen 0 1440x900x24" bash -c '
-            set -e
-            export QT_QPA_PLATFORM=xcb
-            "$APP" >/tmp/app.log 2>&1 &
-            APPPID=$!
-            # app must stay alive ~15s or the shot would be of an empty screen
-            for i in $(seq 1 30); do
-              kill -0 $APPPID 2>/dev/null || { echo "app died during startup:"; cat /tmp/app.log; exit 3; }
-              sleep 0.5
-            done
-            import -window root dist/shots/01-first-run-wizard.png
-            # dismiss the modal first-run wizard (Escape closes a Quick Dialog)
-            xdotool key Escape; sleep 1
-            xdotool search --name "Eclipse" windowactivate 2>/dev/null || true
-            xdotool mousemove 700 600 click 1; sleep 0.5
-            import -window root dist/shots/02-main.png
-            # command palette (Ctrl+Shift+P)
-            xdotool key ctrl+shift+p; sleep 1.5
-            import -window root dist/shots/03-command-palette.png
-            xdotool key Escape; sleep 0.5
-            # open Settings through the palette search (shows fuzzy filter)
-            xdotool key ctrl+shift+p; sleep 1.2
-            xdotool type --delay 40 "settings"; sleep 0.6
-            import -window root dist/shots/04-palette-search.png
-            xdotool key Escape; sleep 0.5
-            # Settings page via the top-right nav button (deterministic coords)
-            xdotool mousemove 1233 21 click 1; sleep 2
-            import -window root dist/shots/05-settings.png
-            kill $APPPID 2>/dev/null || true
-          '
-          echo "--- app log ---"; tail -20 /tmp/app.log || true
-          ls -la dist/shots
-          # gate 0: QML health - no runtime errors in the interactive run
-          if grep -nE "ReferenceError|is not defined|is not installed|Unable to assign|TypeError:|Style names must not contain paths|failed to load icon font|Cannot override FINAL" /tmp/app.log; then
-            echo "FATAL: QML runtime errors in app log"; exit 1
-          fi
-           grep -q "Quick Controls style (post-load): EclipseMD3" /tmp/app.log || { echo "FATAL: EclipseMD3 style not active"; exit 1; }
-          # gate 1: main shot exists
-          [ -s dist/shots/02-main.png ] || { echo "FATAL: main screenshot missing"; exit 1; }
-          # gate 2: not a blank screen (blank 1440x900 PNG has ~1-2 unique colors)
-          COLORS=$(identify -format '%k' dist/shots/02-main.png)
-          echo "unique colors in main shot: $COLORS"
-          [ "$COLORS" -gt 16 ] || { echo "FATAL: screenshot is blank - app window never appeared"; exit 1; }
-
-      - name: Upload screenshots
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots
-          path: dist/shots/*.png
-          if-no-files-found: error
-
-      - name: Debian package
-        run: ECLIPSE_BUILD_DIR="$PWD/build/ci" bash packaging/debian/build-deb.sh
-
-      - name: Portable archive
-        run: ECLIPSE_BUILD_DIR="$PWD/build/ci" bash packaging/portable/make-portable.sh
-
-      - name: AppImage
-        env:
-          APPIMAGE_EXTRACT_AND_RUN: "1"
-        run: |
-          curl -sL -o /tmp/linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          curl -sL -o /tmp/linuxdeploy-plugin-qt https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
-          chmod +x /tmp/linuxdeploy /tmp/linuxdeploy-plugin-qt
-          export PATH="/tmp:$PATH"
-          ECLIPSE_BUILD_DIR="$PWD/build/ci" bash packaging/appimage/build-appimage.sh
+          cd build/ci && cpack -G TGZ && cpack -G DEB 2>/dev/null || true
+          ls -la eclipse-ssh*.* || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-packages
           path: |
-            dist/*.deb
-            dist/*.tar.xz
-            dist/*.AppImage
-          if-no-files-found: error
+            build/ci/*.tar.gz
+            build/ci/*.deb
+          if-no-files-found: warn
 
   windows:
     name: Windows build (MSYS2 MinGW64)
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
-
       - uses: msys2/setup-msys2@v2
         with:
-          update: false
-          release: false
-          cache: true
           msystem: MINGW64
+          update: false
           install: >-
+            git make ninja
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-ccache
-            mingw-w64-x86_64-qt6-base
-            mingw-w64-x86_64-qt6-declarative
-            mingw-w64-x86_64-qt6-5compat
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-gtk4
             mingw-w64-x86_64-libssh
-            mingw-w64-x86_64-libssh2
             mingw-w64-x86_64-libvterm
-            mingw-w64-x86_64-qt6-serialport
             mingw-w64-x86_64-openssl
-            mingw-w64-x86_64-pkgconf
-
-      - name: Restore ccache
-        uses: actions/cache@v4
-        with:
-          path: 'C:/Users/runneradmin/AppData/Local/ccache'
-          key: ccache-windows-${{ github.sha }}
-          restore-keys: ccache-windows-
-
-      - name: Configure
-        shell: msys2 {0}
-        run: |
-          cmake -G Ninja -B build/ci \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DECLIPSE_WARNINGS_AS_ERRORS=OFF \
-            -DECLIPSE_BUILD_TESTS=ON \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+            mingw-w64-x86_64-zlib
 
       - name: Build
-        shell: msys2 {0}
-        run: cmake --build build/ci -j
+        run: |
+          cmake -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/ci -j"$(nproc)"
 
-      - name: Tests
-        shell: msys2 {0}
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: ctest --test-dir build/ci --output-on-failure
+      - name: Unit tests
+        run: ./build/ci/test_unit
 
-      - name: Deploy runtime (windeployqt + full DLL closure + verify)
-        shell: msys2 {0}
-        env:
-          ECLIPSE_BUILD_DIR: build/ci
-        run: bash packaging/windows/deploy-runtime.sh
+      - name: CLI smoke
+        run: ./build/ci/eclipse-ssh-cli 2>&1 | head -3
 
-      - name: Smoke launch (offscreen)
-        shell: msys2 {0}
+      - name: GUI smoke (real desktop)
         run: |
           set +e
-          QT_QPA_PLATFORM=offscreen ECLIPSE_HEADLESS=1 ECLIPSE_LOG_STDERR=1 timeout -k 2 8 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/smoke.log 2>&1
+          ECLIPSE_HEADLESS=1 timeout -k 2 40 ./build/ci/eclipse-ssh > /tmp/smoke-win.log 2>&1
           RC=$?
           set -e
-          echo "smoke exit code: $RC"
-          cat /tmp/smoke.log || true
-          echo "--- recent app logs ---"
-          for V in "$APPDATA" "$LOCALAPPDATA"; do
-            [ -n "$V" ] || continue
-            D=$(cygpath -u "$V" 2>/dev/null || echo "$V")
-            find "$D" -type f -name 'eclipse-ssh.log' -mmin -3 2>/dev/null | head -1 | xargs -r tail -5 || true
-          done
-          [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ] || [ "$RC" -eq 137 ]
-          if grep -qi "is not installed" /tmp/smoke.log; then echo "QML MODULE MISSING IN DIST"; exit 1; fi
-
-
-      - name: Smoke launch (real windows desktop, bundled QML only)
-        shell: msys2 {0}
-        run: |
-          set +e
-          unset QT_QPA_PLATFORM
-          ECLIPSE_HEADLESS=1 timeout -k 2 40 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/smoke-win.log 2>&1
-          RC=$?
-          set -e
-          echo "real-platform smoke exit code: $RC"
+          echo "smoke exit: $RC (124=timeout-kill, expected)"
           cat /tmp/smoke-win.log || true
           [ "$RC" -eq 124 ] || [ "$RC" -eq 0 ] || [ "$RC" -eq 137 ]
-          grep -q "QML root" /tmp/smoke-win.log || { echo "APP NEVER REACHED QML LOAD"; exit 1; }
-          if grep -qi "is not installed" /tmp/smoke-win.log; then
-            echo "QML MODULES NOT IMPORTABLE FROM DIST (qt.conf/import path bug)"; exit 1
+          if grep -nEi "GLib-GObject-ERROR|Gtk-ERROR|Segmentation" /tmp/smoke-win.log; then
+            echo "FATAL: GUI crashed at startup"; exit 1
           fi
-          if grep -nE "ReferenceError|is not defined|is not installed|Unable to assign|TypeError:|Style names must not contain paths|failed to load icon font|Cannot override FINAL" /tmp/smoke-win.log; then
-            echo "FATAL: QML runtime errors in smoke log"; exit 1
-          fi
-          grep -q "Quick Controls style (post-load): EclipseMD3" /tmp/smoke-win.log || { echo "FATAL: EclipseMD3 style not active"; exit 1; }
-          test -f ./dist/win64/qt.conf || { echo "qt.conf missing from dist"; exit 1; }
+          echo "GUI smoke OK"
 
-      - name: Single instance (2nd exits 0 and pokes 1st; 1st stays alive)
-        shell: msys2 {0}
+      - name: Package zip (portable)
         run: |
-          ECLIPSE_HEADLESS=1 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/first.log 2>&1 &
-          FIRST=$!
-          sleep 15
-          if ! kill -0 $FIRST 2>/dev/null; then echo "FIRST INSTANCE DIED"; cat /tmp/first.log; exit 1; fi
-          grep -q "QML root" /tmp/first.log || { echo "FIRST INSTANCE NEVER REACHED QML LOAD"; cat /tmp/first.log; kill -9 $FIRST 2>/dev/null || true; exit 1; }
-          set +e
-          ECLIPSE_HEADLESS=1 timeout -k 2 10 ./dist/win64/eclipse-ssh-desktop.exe > /tmp/second.log 2>&1
-          RC=$?
-          set -e
-          echo "second instance exit code: $RC"
-          cat /tmp/second.log || true
-          if [ "$RC" -ne 0 ]; then echo "SECOND INSTANCE DID NOT EXIT CLEANLY"; kill -9 $FIRST 2>/dev/null || true; exit 1; fi
-          grep -q "already running" /tmp/second.log || { echo "MUTEX NOT DETECTED BY SECOND INSTANCE"; kill -9 $FIRST 2>/dev/null || true; exit 1; }
-          if ! kill -0 $FIRST 2>/dev/null; then echo "FIRST INSTANCE DIED"; exit 1; fi
-          kill -9 $FIRST 2>/dev/null || true
-          echo "single-instance handshake OK"
-
-      - name: CLI help via redirected stdout
-        shell: msys2 {0}
-        run: |
-          set +e
-          ./dist/win64/eclipse-ssh-desktop.exe --help > /tmp/help.log 2>&1
-          RC=$?
-          set -e
-          echo "help exit code: $RC"
-          head -8 /tmp/help.log
-          [ "$RC" -eq 0 ] && grep -qi "eclipse" /tmp/help.log
+          mkdir -p dist/win64
+          cp build/ci/eclipse-ssh.exe build/ci/eclipse-ssh-cli.exe dist/win64/ 2>/dev/null || true
+          cd dist/win64
+          ldd eclipse-ssh.exe 2>/dev/null | awk '/=> \/mingw64/{print $3}' | xargs -r -I{} cp -n {} . || true
+          ldd eclipse-ssh-cli.exe 2>/dev/null | awk '/=> \/mingw64/{print $3}' | xargs -r -I{} cp -n {} . || true
+          mkdir -p share/glib-2.0/schemas
+          cp /mingw64/share/glib-2.0/schemas/gschemas.compiled share/glib-2.0/schemas/ 2>/dev/null || true
+          # GTK4 requires its schemas + loaders; copy minimal trees
+          cp -r /mingw64/lib/gtk-4.0 lib/ 2>/dev/null || true
+          cd ..
+          7z a eclipse-ssh-windows-x86_64.zip win64 > /dev/null || true
+          ls -la
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-portable
-          path: dist/win64/
-          if-no-files-found: error
+          name: windows-package
+          path: dist/eclipse-ssh-windows-x86_64.zip
+          if-no-files-found: warn

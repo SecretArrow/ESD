@@ -1,94 +1,168 @@
 cmake_minimum_required(VERSION 3.24)
+project(eclipse-ssh VERSION 1.0.0 LANGUAGES C)
 
-project(EclipseSSH
-    VERSION 0.3.2
-    DESCRIPTION "Eclipse SSH Desktop - a modern, modular SSH/SFTP client"
-    LANGUAGES CXX)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+option(ECLIPSE_BUILD_UI "Build the GTK4 GUI" ON)
+option(ECLIPSE_BUILD_TESTS "Build tests" ON)
+option(ECLIPSE_WERROR "Treat warnings as errors (spec rule 20)" ON)
+option(ECLIPSE_ASAN "Enable ASan/UBSan" OFF)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+# zlib must be resolvable after static libssh/gio on link order (DSO missing fix)
+set(CMAKE_C_STANDARD_LIBRARIES "-lz -lgssapi_krb5 -lkrb5 -lk5crypto -lcom_err ${CMAKE_C_STANDARD_LIBRARIES}")
 
-# Windows resources (.rc: application icon + VERSIONINFO). Enabled early so
-# target_sources(... app.rc) in src/CMakeLists.txt resolves a compiler.
-if(WIN32)
-    enable_language(RC)
-endif()
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC ON)
-
-option(ECLIPSE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
-option(ECLIPSE_BUILD_TESTS        "Build automated tests"            ON)
-option(ECLIPSE_WITH_LIBSSH        "Enable libssh SSH backend"        ON)
-option(ECLIPSE_WITH_LIBSSH2       "Enable libssh2 SSH backend"       ON)
-option(ECLIPSE_DEVELOPER_MODE     "Enable developer diagnostics UI"  ON)
-
-include(CompilerWarnings)
-
-# SerialPort is optional: serial console connections degrade to a stub when
-# the module is not installed (see src/net/SerialSession.*).
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Sql Network Concurrent Widgets
-    OPTIONAL_COMPONENTS SerialPort)
-qt_standard_project_setup()
-
-# Qt 6.8+: register qmldir files for QML files in module subdirectories
-# (pages/, components/, dialogs/). Without this, Qt 6.10+ builds may fail
-# to resolve cross-directory module types at runtime ("X is not a type").
-if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
-    qt_policy(SET QTP0004 NEW)
+if(ECLIPSE_ASAN)
+  add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined)
 endif()
 
 find_package(PkgConfig REQUIRED)
+pkg_check_modules(GLIB2 REQUIRED IMPORTED_TARGET glib-2.0)
+pkg_check_modules(GIO2 REQUIRED IMPORTED_TARGET gio-2.0)
+pkg_check_modules(LIBSSH REQUIRED IMPORTED_TARGET libssh)
+pkg_check_modules(VTERM REQUIRED IMPORTED_TARGET vterm)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
-
-if(ECLIPSE_WITH_LIBSSH)
-    if(WIN32 AND DEFINED ENV{MSYSTEM})
-        # MSYS2/MinGW-w64: pkgconf reports POSIX-style /mingw64 paths that native
-        # CMake cannot resolve. The MinGW compiler searches those dirs by default,
-        # so link by bare library name instead of going through pkg-config.
-        if(NOT TARGET PkgConfig::LIBSSH)
-            add_library(PkgConfig::LIBSSH INTERFACE IMPORTED)
-            set_target_properties(PkgConfig::LIBSSH PROPERTIES IMPORTED_LIBNAME "ssh")
-        endif()
-        message(STATUS "libssh backend enabled: MSYS2 default search path")
-    else()
-        pkg_check_modules(LIBSSH IMPORTED_TARGET REQUIRED libssh)
-        message(STATUS "libssh backend enabled: ${LIBSSH_VERSION}")
-    endif()
-endif()
-if(ECLIPSE_WITH_LIBSSH2)
-    if(WIN32 AND DEFINED ENV{MSYSTEM})
-        if(NOT TARGET PkgConfig::LIBSSH2)
-            add_library(PkgConfig::LIBSSH2 INTERFACE IMPORTED)
-            set_target_properties(PkgConfig::LIBSSH2 PROPERTIES IMPORTED_LIBNAME "ssh2")
-        endif()
-        message(STATUS "libssh2 backend enabled: MSYS2 default search path")
-    else()
-        pkg_check_modules(LIBSSH2 IMPORTED_TARGET REQUIRED libssh2)
-        message(STATUS "libssh2 backend enabled: ${LIBSSH2_VERSION}")
-    endif()
-endif()
-if(WIN32 AND DEFINED ENV{MSYSTEM})
-    if(NOT TARGET PkgConfig::VTERM)
-        add_library(PkgConfig::VTERM INTERFACE IMPORTED)
-        set_target_properties(PkgConfig::VTERM PROPERTIES IMPORTED_LIBNAME "vterm")
-    endif()
-    message(STATUS "libvterm: MSYS2 default search path")
-else()
-    pkg_check_modules(VTERM IMPORTED_TARGET REQUIRED vterm)
-    message(STATUS "libvterm: ${VTERM_VERSION}")
+if(ECLIPSE_BUILD_UI)
+  pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
 endif()
 
-configure_file(cmake/EclipseVersion.h.in ${CMAKE_BINARY_DIR}/generated/EclipseVersion.h @ONLY)
+# ---- shared compile hygiene for our own sources ----
+add_library(ec_flags INTERFACE)
+target_compile_options(ec_flags INTERFACE
+  -Wall -Wextra -Wshadow -Wconversion -Wno-unused-parameter
+  $<$<BOOL:${ECLIPSE_WERROR}>:-Werror>
+  -D_GNU_SOURCE -D_DEFAULT_SOURCE)
+if(WIN32)
+  target_compile_definitions(ec_flags INTERFACE _WIN32_WINNT=0x0601)
+endif()
 
-add_subdirectory(src)
+# ---- umbrella include path for all modules ----
+add_library(ec_includes INTERFACE)
+target_include_directories(ec_includes INTERFACE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/platform
+  ${CMAKE_CURRENT_SOURCE_DIR}/security
+  ${CMAKE_CURRENT_SOURCE_DIR}/ssh
+  ${CMAKE_CURRENT_SOURCE_DIR}/sftp
+  ${CMAKE_CURRENT_SOURCE_DIR}/terminal
+  ${CMAKE_CURRENT_SOURCE_DIR}/forwarding
+  ${CMAKE_CURRENT_SOURCE_DIR}/network
+  ${CMAKE_CURRENT_SOURCE_DIR}/config
+  ${CMAKE_CURRENT_SOURCE_DIR}/ui
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cjson)
 
+# ============================================================= core
+add_library(eclipse_core STATIC
+  core/core.c
+  vendor/cjson/cJSON.c)
+target_include_directories(eclipse_core PUBLIC core platform vendor vendor/cjson)
+target_link_libraries(eclipse_core PUBLIC ec_includes)
+target_link_libraries(eclipse_core PUBLIC ec_flags PkgConfig::GLIB2 OpenSSL::Crypto)
+find_package(Threads REQUIRED)
+target_link_libraries(eclipse_core PUBLIC eclipse_platform Threads::Threads)
+
+# Optional extra include dir (dev sandboxes with bundled libssh/libvterm)
+set(ECLIPSE_EXTRA_INCLUDES "" CACHE PATH "Extra include dir for bundled deps")
+if(ECLIPSE_EXTRA_INCLUDES)
+  include_directories(${ECLIPSE_EXTRA_INCLUDES} ${ECLIPSE_EXTRA_INCLUDES}/libssh)
+endif()
+
+# ============================================================= platform
+add_library(eclipse_platform STATIC platform/platform_posix.c platform/platform_win32.c)
+set_source_files_properties(platform/platform_win32.c PROPERTIES HEADER_FILE_ONLY ON)
+target_include_directories(eclipse_platform PUBLIC platform)
+target_link_libraries(eclipse_platform PUBLIC ec_includes)
+
+# ============================================================= security
+add_library(eclipse_security STATIC security/security.c)
+target_include_directories(eclipse_security PUBLIC security)
+target_link_libraries(eclipse_security PUBLIC ec_includes)
+target_link_libraries(eclipse_security PUBLIC eclipse_core PkgConfig::LIBSSH OpenSSL::Crypto)
+
+# ============================================================= ssh engine
+add_library(eclipse_ssh STATIC ssh/ssh_engine.c ssh/session.c)
+target_include_directories(eclipse_ssh PUBLIC ssh)
+target_link_libraries(eclipse_ssh PUBLIC ec_includes)
+target_link_libraries(eclipse_ssh PUBLIC eclipse_core eclipse_security PkgConfig::LIBSSH)
+
+# ============================================================= sftp
+add_library(eclipse_sftp STATIC sftp/sftp.c)
+target_include_directories(eclipse_sftp PUBLIC sftp)
+target_link_libraries(eclipse_sftp PUBLIC ec_includes)
+target_link_libraries(eclipse_sftp PUBLIC eclipse_ssh PkgConfig::LIBSSH)
+
+# ============================================================= terminal
+add_library(eclipse_terminal STATIC terminal/term_core.c)
+target_include_directories(eclipse_terminal PUBLIC terminal)
+target_link_libraries(eclipse_terminal PUBLIC ec_includes)
+target_link_libraries(eclipse_terminal PUBLIC eclipse_core PkgConfig::VTERM ZLIB::ZLIB)
+
+# ============================================================= forwarding
+add_library(eclipse_forward STATIC forwarding/fwd.c)
+target_include_directories(eclipse_forward PUBLIC forwarding)
+target_link_libraries(eclipse_forward PUBLIC ec_includes)
+target_link_libraries(eclipse_forward PUBLIC eclipse_ssh PkgConfig::GIO2)
+
+# ============================================================= network (proxy)
+add_library(eclipse_network STATIC network/proxy.c)
+target_include_directories(eclipse_network PUBLIC network)
+target_link_libraries(eclipse_network PUBLIC ec_includes)
+target_link_libraries(eclipse_network PUBLIC eclipse_core PkgConfig::GIO2)
+
+# ============================================================= config repos
+add_library(eclipse_config STATIC config/repos.c core/theme.c)
+target_include_directories(eclipse_config PUBLIC config core)
+target_link_libraries(eclipse_config PUBLIC ec_includes)
+target_link_libraries(eclipse_config PUBLIC eclipse_core eclipse_security)
+
+# ============================================================= GUI
+if(ECLIPSE_BUILD_UI)
+  add_library(eclipse_ui STATIC ui/ui.c ui/term_page.c)
+  target_include_directories(eclipse_ui PUBLIC ui)
+target_link_libraries(eclipse_ui PUBLIC ec_includes)
+  target_link_libraries(eclipse_ui PUBLIC
+    eclipse_core eclipse_config eclipse_security eclipse_ssh eclipse_sftp
+    eclipse_terminal eclipse_forward PkgConfig::GTK4)
+
+  add_executable(eclipse-ssh app/main.c)
+  target_link_libraries(eclipse-ssh PRIVATE eclipse_ui)
+  install(TARGETS eclipse-ssh RUNTIME DESTINATION bin)
+endif()
+
+# ============================================================= CLI
+add_executable(eclipse-ssh-cli cli/main.c)
+target_link_libraries(eclipse-ssh-cli PRIVATE
+  eclipse_core eclipse_config eclipse_security eclipse_ssh eclipse_sftp
+  eclipse_forward eclipse_network PkgConfig::GIO2 ZLIB::ZLIB)
+install(TARGETS eclipse-ssh-cli RUNTIME DESTINATION bin)
+
+# ============================================================= tests
 if(ECLIPSE_BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
+  enable_testing()
+  add_executable(test_unit tests/test_unit.c)
+  target_link_libraries(test_unit PRIVATE
+    eclipse_core eclipse_config eclipse_security eclipse_network eclipse_terminal eclipse_forward ZLIB::ZLIB PkgConfig::GIO2)
+  add_test(NAME unit COMMAND test_unit)
+
+  add_executable(test_roundtrip tests/test_roundtrip.c)
+  target_link_libraries(test_roundtrip PRIVATE
+    eclipse_core eclipse_config eclipse_security eclipse_ssh eclipse_sftp eclipse_forward)
+  add_test(NAME ssh_roundtrip COMMAND test_roundtrip)
 endif()
+
+# ============================================================= packaging
+set(CPACK_PACKAGE_NAME "eclipse-ssh")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_CONTACT "SecretArrow")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libgtk-4-1, libssh-4, libvterm0, libssl3")
+set(CPACK_DEBIAN_PACKAGE_SECTION "net")
+set(CPACK_GENERATOR "TGZ")
+if(UNIX AND NOT APPLE)
+  find_program(DPKG_FOUND dpkg)
+  if(DPKG_FOUND)
+    list(APPEND CPACK_GENERATOR "DEB")
+  endif()
+endif()
+include(CPack)
