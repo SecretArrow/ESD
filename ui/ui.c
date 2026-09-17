@@ -794,9 +794,8 @@ static void palette_execute(GtkEntry* entry, gpointer user)
     for (size_t i = 0; i < app->snippets.snippets.len; i++) {
         EcSnippet* sn = app->snippets.snippets.items[i];
         if (strcmp(sn->name, text) == 0) {
-            guint n = gtk_notebook_get_n_pages(GTK_NOTEBOOK(app->notebook));
             int cur = gtk_notebook_get_current_page(GTK_NOTEBOOK(app->notebook));
-            if (cur >= 0 && (guint)cur < n) {
+            if (cur >= 0) {
                 for (size_t j = 0; j < app->live.len; j++) {
                     EcTermPage* p = app->live.items[j];
                     if (ui_term_page_widget(p) ==

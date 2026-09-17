@@ -19,11 +19,16 @@ endif()
 find_package(PkgConfig REQUIRED)
 if(NOT WIN32)
   pkg_check_modules(GLIB2 REQUIRED IMPORTED_TARGET glib-2.0)
+  add_library(ecdep::GLIB2 ALIAS PkgConfig::GLIB2)
   pkg_check_modules(GIO2 REQUIRED IMPORTED_TARGET gio-2.0)
+  add_library(ecdep::GIO2 ALIAS PkgConfig::GIO2)
   pkg_check_modules(LIBSSH REQUIRED IMPORTED_TARGET libssh)
+  add_library(ecdep::LIBSSH ALIAS PkgConfig::LIBSSH)
   pkg_check_modules(VTERM REQUIRED IMPORTED_TARGET vterm)
+  add_library(ecdep::VTERM ALIAS PkgConfig::VTERM)
   if(ECLIPSE_BUILD_UI)
     pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
+    add_library(ecdep::GTK4 ALIAS PkgConfig::GTK4)
   endif()
 endif()
 find_package(OpenSSL REQUIRED)
@@ -60,7 +65,7 @@ add_library(eclipse_core STATIC
   vendor/cjson/cJSON.c)
 target_include_directories(eclipse_core PUBLIC core platform vendor vendor/cjson)
 target_link_libraries(eclipse_core PUBLIC ec_includes)
-target_link_libraries(eclipse_core PUBLIC ec_flags PkgConfig::GLIB2 OpenSSL::Crypto)
+target_link_libraries(eclipse_core PUBLIC ec_flags ecdep::GLIB2 OpenSSL::Crypto)
 find_package(Threads REQUIRED)
 target_link_libraries(eclipse_core PUBLIC eclipse_platform Threads::Threads)
 
@@ -81,10 +86,10 @@ if(WIN32)
   macro(ms2_target name inc lib)
     find_path(${name}_INCLUDE_DIR ${inc} PATHS ${MS2_PREFIX}/include NO_DEFAULT_PATH)
     find_library(${name}_LIBRARY ${lib} PATHS ${MS2_PREFIX}/lib NO_DEFAULT_PATH)
-    if(NOT TARGET PkgConfig::${name})
-      add_library(PkgConfig::${name} INTERFACE IMPORTED)
+    if(NOT TARGET ecdep::${name})
+      add_library(ecdep::${name} INTERFACE IMPORTED)
     endif()
-    set_target_properties(PkgConfig::${name} PROPERTIES
+    set_target_properties(ecdep::${name} PROPERTIES
       INTERFACE_INCLUDE_DIRECTORIES "${${name}_INCLUDE_DIR}"
       INTERFACE_LINK_LIBRARIES "${${name}_LIBRARY}")
   endmacro()
@@ -114,37 +119,37 @@ target_link_libraries(eclipse_platform PUBLIC ec_includes)
 add_library(eclipse_security STATIC security/security.c)
 target_include_directories(eclipse_security PUBLIC security)
 target_link_libraries(eclipse_security PUBLIC ec_includes)
-target_link_libraries(eclipse_security PUBLIC eclipse_core PkgConfig::LIBSSH OpenSSL::Crypto)
+target_link_libraries(eclipse_security PUBLIC eclipse_core ecdep::LIBSSH OpenSSL::Crypto)
 
 # ============================================================= ssh engine
 add_library(eclipse_ssh STATIC ssh/ssh_engine.c ssh/session.c)
 target_include_directories(eclipse_ssh PUBLIC ssh)
 target_link_libraries(eclipse_ssh PUBLIC ec_includes)
-target_link_libraries(eclipse_ssh PUBLIC eclipse_core eclipse_security PkgConfig::LIBSSH)
+target_link_libraries(eclipse_ssh PUBLIC eclipse_core eclipse_security ecdep::LIBSSH)
 
 # ============================================================= sftp
 add_library(eclipse_sftp STATIC sftp/sftp.c)
 target_include_directories(eclipse_sftp PUBLIC sftp)
 target_link_libraries(eclipse_sftp PUBLIC ec_includes)
-target_link_libraries(eclipse_sftp PUBLIC eclipse_ssh PkgConfig::LIBSSH)
+target_link_libraries(eclipse_sftp PUBLIC eclipse_ssh ecdep::LIBSSH)
 
 # ============================================================= terminal
 add_library(eclipse_terminal STATIC terminal/term_core.c)
 target_include_directories(eclipse_terminal PUBLIC terminal)
 target_link_libraries(eclipse_terminal PUBLIC ec_includes)
-target_link_libraries(eclipse_terminal PUBLIC eclipse_core PkgConfig::VTERM ZLIB::ZLIB)
+target_link_libraries(eclipse_terminal PUBLIC eclipse_core ecdep::VTERM ZLIB::ZLIB)
 
 # ============================================================= forwarding
 add_library(eclipse_forward STATIC forwarding/fwd.c)
 target_include_directories(eclipse_forward PUBLIC forwarding)
 target_link_libraries(eclipse_forward PUBLIC ec_includes)
-target_link_libraries(eclipse_forward PUBLIC eclipse_ssh PkgConfig::GIO2)
+target_link_libraries(eclipse_forward PUBLIC eclipse_ssh ecdep::GIO2)
 
 # ============================================================= network (proxy)
 add_library(eclipse_network STATIC network/proxy.c)
 target_include_directories(eclipse_network PUBLIC network)
 target_link_libraries(eclipse_network PUBLIC ec_includes)
-target_link_libraries(eclipse_network PUBLIC eclipse_core PkgConfig::GIO2)
+target_link_libraries(eclipse_network PUBLIC eclipse_core ecdep::GIO2)
 
 # ============================================================= config repos
 add_library(eclipse_config STATIC config/repos.c core/theme.c)
@@ -162,7 +167,7 @@ if(ECLIPSE_BUILD_UI)
 target_link_libraries(eclipse_ui PUBLIC ec_includes)
   target_link_libraries(eclipse_ui PUBLIC
     eclipse_core eclipse_config eclipse_security eclipse_ssh eclipse_sftp
-    eclipse_terminal eclipse_forward PkgConfig::GTK4)
+    eclipse_terminal eclipse_forward ecdep::GTK4)
 
   add_executable(eclipse-ssh app/main.c)
   target_link_libraries(eclipse-ssh PRIVATE eclipse_ui)
@@ -173,7 +178,7 @@ endif()
 add_executable(eclipse-ssh-cli cli/main.c)
 target_link_libraries(eclipse-ssh-cli PRIVATE
   eclipse_core eclipse_config eclipse_security eclipse_ssh eclipse_sftp
-  eclipse_forward eclipse_network PkgConfig::GIO2 ZLIB::ZLIB)
+  eclipse_forward eclipse_network ecdep::GIO2 ZLIB::ZLIB)
 install(TARGETS eclipse-ssh-cli RUNTIME DESTINATION bin)
 
 # ============================================================= tests
@@ -181,7 +186,7 @@ if(ECLIPSE_BUILD_TESTS)
   enable_testing()
   add_executable(test_unit tests/test_unit.c)
   target_link_libraries(test_unit PRIVATE
-    eclipse_core eclipse_config eclipse_security eclipse_network eclipse_terminal eclipse_forward ZLIB::ZLIB PkgConfig::GIO2)
+    eclipse_core eclipse_config eclipse_security eclipse_network eclipse_terminal eclipse_forward ZLIB::ZLIB ecdep::GIO2)
   add_test(NAME unit COMMAND test_unit)
 
   add_executable(test_roundtrip tests/test_roundtrip.c)

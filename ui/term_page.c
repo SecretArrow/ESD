@@ -32,7 +32,7 @@ static void utf8_from_cp(uint32_t cp, char out[5])
     }
 }
 
-static void set_rgb(cairo_t* cr, uint8_t r, uint8_t g, uint8_t b)
+static void set_rgb(cairo_t* cr, double r, double g, double b)
 {
     cairo_set_source_rgb(cr, r / 255.0, g / 255.0, b / 255.0);
 }
