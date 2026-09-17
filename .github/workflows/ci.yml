@@ -124,7 +124,7 @@ jobs:
         run: ./build/ci/test_unit
 
       - name: CLI smoke
-        run: ./build/ci/eclipse-ssh-cli 2>&1 | head -3
+        ./build/ci/eclipse-ssh-cli list
 
       - name: GUI smoke (real desktop)
         run: |
