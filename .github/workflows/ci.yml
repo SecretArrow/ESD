@@ -40,9 +40,9 @@ jobs:
 
       - name: Start local sshd (testbed)
         run: |
-          ssh-keygen -t ed25519 -N '' -f "$HOME/testkey" -q
+          ssh-keygen -t ed25519 -N '' -f "$GITHUB_WORKSPACE/testkey" -q
           mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
-          cp "$HOME/testkey.pub" "$HOME/.ssh/authorized_keys"
+          cp "$GITHUB_WORKSPACE/testkey.pub" "$HOME/.ssh/authorized_keys"
           chmod 600 "$HOME/.ssh/authorized_keys"
           sudo usermod -p '*' runner
           sudo mkdir -p /run/sshd

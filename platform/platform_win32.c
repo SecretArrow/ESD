@@ -9,6 +9,7 @@
 #include "eclipse/platform.h"
 
 #include <windows.h>
+#include <shellapi.h>
 #include <shlobj.h>
 
 static wchar_t* utf8_to_wide(const char* s)

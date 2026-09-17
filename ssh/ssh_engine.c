@@ -379,7 +379,7 @@ bool ec_ssh_wait_readable(EcSshChannel* c, int timeout_ms)
 {
     /* small cooperative wait: the read pump polls with nonblocking reads;
      * this helper just parks the thread briefly (glib, portable). */
-    if (timeout_ms > 0) g_usleep((guint64)timeout_ms * 1000);
+    if (timeout_ms > 0) g_usleep((gulong)timeout_ms * 1000u);
     return c && c->ch && ssh_channel_is_closed(c->ch) == 0 && ssh_channel_is_eof(c->ch) == 0;
 }
 
