@@ -245,7 +245,7 @@ static gboolean hk_show_idle(gpointer user)
     snprintf(body, sizeof body,
              "%s\n\nHost: %s:%d\nKey type: %s\nFingerprint: %s\n\nAccept this host key?",
              warn, ctx->host, ctx->port, ctx->key.type ? ctx->key.type : "?", fp);
-    AdwAlertDialog* dlg = adw_alert_dialog_new(heading, body);
+    AdwAlertDialog* dlg = ADW_ALERT_DIALOG(adw_alert_dialog_new(heading, body));
     adw_alert_dialog_add_response(dlg, "reject", "Reject");
     adw_alert_dialog_add_response(dlg, "once", "Accept once");
     if (ctx->st != EC_HK_CHANGED) {
@@ -533,7 +533,7 @@ static void err_response(AdwAlertDialog* dlg, gchar* response, gpointer user)
 
 void ui_show_error(EcApp* app, const char* title, const char* message)
 {
-    AdwAlertDialog* dlg = adw_alert_dialog_new(title, message ? message : title);
+    AdwAlertDialog* dlg = ADW_ALERT_DIALOG(adw_alert_dialog_new(title, message ? message : title));
     adw_alert_dialog_add_response(dlg, "close", "Close");
     adw_alert_dialog_set_default_response(dlg, "close");
     adw_alert_dialog_set_close_response(dlg, "close");
