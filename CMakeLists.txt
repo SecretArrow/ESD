@@ -17,16 +17,17 @@ if(ECLIPSE_ASAN)
 endif()
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GLIB2 REQUIRED IMPORTED_TARGET glib-2.0)
-pkg_check_modules(GIO2 REQUIRED IMPORTED_TARGET gio-2.0)
-pkg_check_modules(LIBSSH REQUIRED IMPORTED_TARGET libssh)
-pkg_check_modules(VTERM REQUIRED IMPORTED_TARGET vterm)
+if(NOT WIN32)
+  pkg_check_modules(GLIB2 REQUIRED IMPORTED_TARGET glib-2.0)
+  pkg_check_modules(GIO2 REQUIRED IMPORTED_TARGET gio-2.0)
+  pkg_check_modules(LIBSSH REQUIRED IMPORTED_TARGET libssh)
+  pkg_check_modules(VTERM REQUIRED IMPORTED_TARGET vterm)
+  if(ECLIPSE_BUILD_UI)
+    pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
+  endif()
+endif()
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
-if(ECLIPSE_BUILD_UI)
-  pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
-endif()
-
 # ---- shared compile hygiene for our own sources ----
 add_library(ec_flags INTERFACE)
 target_compile_options(ec_flags INTERFACE
@@ -88,8 +89,9 @@ if(WIN32)
   ms2_target(GIO2 gio/gio.h gio-2.0)
   ms2_target(LIBSSH libssh/libssh.h ssh)
   ms2_target(VTERM vterm.h vterm)
-  ms2_target(GTK4 gtk/gtk.h gtk-4)
-  # link dirs for deps of gtk4 (pango/gdk etc all in same lib dir)
+  if(ECLIPSE_BUILD_UI)
+    ms2_target(GTK4 gtk/gtk.h gtk-4)
+  endif()
   link_directories(${MS2_PREFIX}/lib)
 endif()
 
@@ -150,6 +152,9 @@ target_link_libraries(eclipse_config PUBLIC eclipse_core eclipse_security)
 # ============================================================= GUI
 if(ECLIPSE_BUILD_UI)
   add_library(eclipse_ui STATIC ui/ui.c ui/term_page.c)
+  # GtkDialog-family APIs are deprecated since GTK 4.10 but still functional;
+  # Adwaita migration tracked separately (docs/ARCHITECTURE.md TODO).
+  target_compile_options(eclipse_ui PRIVATE -Wno-deprecated-declarations)
   target_include_directories(eclipse_ui PUBLIC ui)
 target_link_libraries(eclipse_ui PUBLIC ec_includes)
   target_link_libraries(eclipse_ui PUBLIC
