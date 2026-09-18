@@ -204,6 +204,11 @@ bool ec_file_exists(const char* path)
     return ec_stat_exists(path);
 }
 
+bool ec_file_is_dir(const char* path)
+{
+    return ec_stat_is_dir(path);
+}
+
 bool ec_file_size(const char* path, uint64_t* out)
 {
     return ec_stat_size(path, out);

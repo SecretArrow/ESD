@@ -17,6 +17,7 @@ bool ec_dir_mkdir(const char* path);          /* single level; false if exists/e
 bool ec_remove(const char* path);
 bool ec_rename(const char* from, const char* to);
 bool ec_stat_exists(const char* path);
+bool ec_stat_is_dir(const char* path);
 bool ec_stat_size(const char* path, uint64_t* out);
 bool ec_set_file_mode_600(const char* path);  /* restrict permissions where applicable */
 

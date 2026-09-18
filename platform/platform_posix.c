@@ -42,6 +42,13 @@ bool ec_stat_exists(const char* path)
     return stat(path, &st) == 0;
 }
 
+bool ec_stat_is_dir(const char* path)
+{
+    if (!path) return false;
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
 bool ec_stat_size(const char* path, uint64_t* out)
 {
     if (!path || !out) return false;

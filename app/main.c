@@ -54,20 +54,8 @@ static void app_files_init(EcApp* app)
 
 static void theme_init(EcApp* app)
 {
-    if (strcmp(app->settings.theme, "light") == 0)
-        ec_theme_builtin_light(&app->theme);
-    else
-        ec_theme_builtin_dark(&app->theme);
-    /* custom theme file lookup by name */
-    size_t n = 0;
-    char** files = ec_theme_list(app->themes_dir, &n);
-    for (size_t i = 0; i < n; i++) {
-        EcTheme t;
-        if (ec_theme_load_file(files[i], &t) && strcmp(t.name, app->settings.theme) == 0)
-            app->theme = t;
-    }
-    for (size_t i = 0; i < n; i++) free(files[i]);
-    free(files);
+    /* builtin table first (six themes), then custom JSON override by name */
+    ec_theme_resolve(app->settings.theme, app->themes_dir, &app->theme);
 }
 
 static void on_activate(GtkApplication* gtk_app, gpointer user)

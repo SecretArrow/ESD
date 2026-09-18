@@ -7,6 +7,7 @@
 #include <pango/pangocairo.h>
 
 static void ui_term_page_paste_from_clipboard(EcTermPage* p);
+static void paste_confirmed(const char* text, void* user);
 
 /* ---------------- helpers ---------------- */
 static void utf8_from_cp(uint32_t cp, char out[5])
@@ -35,11 +36,6 @@ static void utf8_from_cp(uint32_t cp, char out[5])
 static void set_rgb(cairo_t* cr, double r, double g, double b)
 {
     cairo_set_source_rgb(cr, r / 255.0, g / 255.0, b / 255.0);
-}
-
-static bool parse_hex(const char* hex, uint8_t out[3])
-{
-    return sscanf(hex, "#%02hhx%02hhx%02hhx", &out[0], &out[1], &out[2]) == 3;
 }
 
 static void measure_metrics(EcTermPage* p)
@@ -85,11 +81,13 @@ static void on_resize(GtkWidget* w, int width, int height, gpointer user)
     }
 }
 
-/* selection overlay (second pass) */
+/* selection overlay (second pass) - theme-driven color */
 static void draw_selection(cairo_t* cr, EcTermPage* p)
 {
     if (!p->has_selection) return;
-    cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.25);
+    uint8_t s[3] = { 0xff, 0xff, 0xff };
+    ec_theme_parse_hex(p->app->theme.c.selection, s);
+    cairo_set_source_rgba(cr, s[0] / 255.0, s[1] / 255.0, s[2] / 255.0, 0.45);
     int a_r = p->sel_anchor_row, a_c = p->sel_anchor_col;
     int e_r = p->sel_end_row, e_c = p->sel_end_col;
     if (a_r > e_r || (a_r == e_r && a_c > e_c)) {
@@ -104,6 +102,29 @@ static void draw_selection(cairo_t* cr, EcTermPage* p)
     }
 }
 
+/* ---------------- scrollbar <-> scrollback ---------------- */
+static void scrollbar_sync(EcTermPage* p)
+{
+    GtkAdjustment* adj = gtk_scrollbar_get_adjustment(GTK_SCROLLBAR(p->scrollbar));
+    if (!adj) return;
+    int sb_len = ec_term_scrollback_len(p->term);
+    double upper = (double)sb_len + (double)p->rows;
+    double value = (double)(sb_len - ec_term_view_offset(p->term));
+    p->scroll_sync = true;
+    gtk_adjustment_configure(adj, value, 0.0, upper, 1.0, (double)p->rows, (double)p->rows);
+    p->scroll_sync = false;
+}
+
+static void on_scrollbar_value(GtkAdjustment* adj, gpointer user)
+{
+    EcTermPage* p = user;
+    if (p->scroll_sync) return;
+    int sb_len = ec_term_scrollback_len(p->term);
+    int off = sb_len - (int)gtk_adjustment_get_value(adj);
+    ec_term_scroll_to(p->term, off);
+    gtk_widget_queue_draw(p->draw);
+}
+
 /* ---------------- draw ---------------- */
 static void draw_term(GtkDrawingArea* area, cairo_t* cr, int width, int height, gpointer user)
 {
@@ -111,9 +132,9 @@ static void draw_term(GtkDrawingArea* area, cairo_t* cr, int width, int height, 
     EcTermPage* p = user;
     EcThemeColors* c = &p->app->theme.c;
     uint8_t tb[3] = { 0x14, 0x17, 0x1c }, tf[3] = { 0xe6, 0xe8, 0xeb }, tc[3] = { 0x4f, 0x8c, 0xff };
-    if (!parse_hex(c->terminal_bg, tb)) { tb[0] = 0x14; tb[1] = 0x17; tb[2] = 0x1c; }
-    if (!parse_hex(c->terminal_fg, tf)) { tf[0] = 0xe6; tf[1] = 0xe8; tf[2] = 0xeb; }
-    if (!parse_hex(c->terminal_cursor, tc)) { tc[0] = 0x4f; tc[1] = 0x8c; tc[2] = 0xff; }
+    if (!ec_theme_parse_hex(c->terminal_bg, tb)) { tb[0] = 0x14; tb[1] = 0x17; tb[2] = 0x1c; }
+    if (!ec_theme_parse_hex(c->terminal_fg, tf)) { tf[0] = 0xe6; tf[1] = 0xe8; tf[2] = 0xeb; }
+    if (!ec_theme_parse_hex(c->terminal_cursor, tc)) { tc[0] = 0x4f; tc[1] = 0x8c; tc[2] = 0xff; }
     set_rgb(cr, tb[0], tb[1], tb[2]);
     cairo_paint(cr);
 
@@ -133,8 +154,6 @@ static void draw_term(GtkDrawingArea* area, cairo_t* cr, int width, int height, 
                 fgr = bgr; fgg = bgg; fgb = bgb;
                 bgr = tr; bgg = tg; bgb = tb2;
             }
-            if (!fgr && !fgg && !fgb) { fgr = tf[0]; fgg = tf[1]; fgb = tf[2]; }
-            if (!bgr && !bgg && !bgb) { bgr = tb[0]; bgg = tb[1]; bgb = tb[2]; }
 
             if (cell->cursor) {
                 set_rgb(cr, tc[0], tc[1], tc[2]);
@@ -167,6 +186,7 @@ static void draw_term(GtkDrawingArea* area, cairo_t* cr, int width, int height, 
         }
     }
     draw_selection(cr, p);
+    scrollbar_sync(p);
     gtk_widget_queue_draw(p->draw); /* simple continuous render; refine with damage model */
 }
 
@@ -350,18 +370,88 @@ static void paste_ready(GObject* src, GAsyncResult* res, gpointer user)
 {
     EcTermPage* p = user;
     char* text = gdk_clipboard_read_text_finish(GDK_CLIPBOARD(src), res, NULL);
-    if (text) {
-        /* paste confirmation (spec #13) is enforced by the caller dialog in
-         * a later iteration; direct paste keeps the async clipboard path */
-        ec_term_paste(p->term, text, strlen(text));
-        g_free(text);
+    if (text && *text) {
+        if (p->app->settings.confirm_paste) {
+            /* spec #13: preview + explicit confirmation before injecting */
+            ui_confirm_paste(p->app, text, paste_confirmed, p);
+        } else {
+            ec_term_paste(p->term, text, strlen(text));
+        }
     }
+    g_free(text);
+}
+
+static void paste_confirmed(const char* text, void* user)
+{
+    EcTermPage* p = user;
+    if (text && *text)
+        ec_term_paste(p->term, text, strlen(text));
 }
 
 static void ui_term_page_paste_from_clipboard(EcTermPage* p)
 {
     GdkClipboard* cb = gtk_widget_get_clipboard(p->draw);
     gdk_clipboard_read_text_async(cb, NULL, paste_ready, p);
+}
+
+/* ---------------- theme / font live apply ---------------- */
+static void term_page_apply_theme(EcTermPage* p)
+{
+    if (!p || !p->term) return;
+    EcThemeColors* c = &p->app->theme.c;
+    uint8_t pal[EC_THEME_ANSI_N][3];
+    static const uint8_t fb[EC_THEME_ANSI_N][3] = {
+        {0,0,0},{205,49,49},{13,188,121},{229,229,16},
+        {36,114,200},{188,63,188},{17,168,205},{229,229,229},
+        {102,102,102},{241,76,76},{35,209,139},{245,245,67},
+        {59,142,234},{214,112,214},{41,184,219},{255,255,255}
+    };
+    for (int i = 0; i < EC_THEME_ANSI_N; i++)
+        if (!ec_theme_parse_hex(c->ansi[i], pal[i]))
+            memcpy(pal[i], fb[i], 3);
+    ec_term_set_palette(p->term, pal);
+    uint8_t tf[3] = { 0xe6, 0xe8, 0xeb }, tb[3] = { 0x14, 0x17, 0x1c };
+    if (!ec_theme_parse_hex(c->terminal_fg, tf)) { tf[0] = 0xe6; tf[1] = 0xe8; tf[2] = 0xeb; }
+    if (!ec_theme_parse_hex(c->terminal_bg, tb)) { tb[0] = 0x14; tb[1] = 0x17; tb[2] = 0x1c; }
+    ec_term_set_default_colors(p->term, tf, tb);
+    gtk_widget_queue_draw(p->draw);
+}
+
+void ui_term_page_apply_theme(EcTermPage* page)
+{
+    if (page) term_page_apply_theme(page);
+}
+
+void ui_term_page_apply_theme_all(EcApp* app)
+{
+    for (size_t i = 0; i < app->live.len; i++)
+        term_page_apply_theme(app->live.items[i]);
+}
+
+void ui_term_page_apply_font(EcTermPage* page)
+{
+    if (!page) return;
+    char fontspec[160];
+    snprintf(fontspec, sizeof fontspec, "%s %d",
+             page->app->settings.font_name, page->app->settings.font_size);
+    if (page->font) pango_font_description_free(page->font);
+    page->font = pango_font_description_from_string(fontspec);
+    if (page->layout) g_object_unref(page->layout);
+    page->layout = gtk_widget_create_pango_layout(page->draw, NULL);
+    pango_layout_set_font_description(page->layout, page->font);
+    measure_metrics(page);
+    /* cell size changed -> reflow to the new geometry */
+    page->pending_cols = (int)(gtk_widget_get_width(page->draw) / page->cell_w);
+    page->pending_rows = (int)(gtk_widget_get_height(page->draw) / page->cell_h);
+    if (page->pending_cols >= 2 && page->pending_rows >= 2 && !page->resize_pending)
+        page->resize_pending = g_timeout_add(30, resize_tick, page);
+    gtk_widget_queue_draw(page->draw);
+}
+
+void ui_term_page_apply_font_all(EcApp* app)
+{
+    for (size_t i = 0; i < app->live.len; i++)
+        ui_term_page_apply_font(app->live.items[i]);
 }
 
 /* ---------------- mouse ---------------- */
@@ -502,7 +592,9 @@ EcTermPage* ui_term_page_new(EcApp* app, EcSession* profile)
 
     GtkWidget* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_box_append(GTK_BOX(box), p->draw);
-    p->scrollbar = gtk_scrollbar_new(GTK_ORIENTATION_VERTICAL, NULL);
+    GtkAdjustment* sadj = gtk_adjustment_new(0.0, 0.0, 24.0, 1.0, 24.0, 24.0);
+    p->scrollbar = gtk_scrollbar_new(GTK_ORIENTATION_VERTICAL, sadj);
+    g_signal_connect(sadj, "value-changed", G_CALLBACK(on_scrollbar_value), p);
     gtk_box_append(GTK_BOX(box), p->scrollbar);
     gtk_box_append(GTK_BOX(p->root), box);
 
@@ -514,6 +606,7 @@ EcTermPage* ui_term_page_new(EcApp* app, EcSession* profile)
     pango_layout_set_font_description(p->layout, p->font);
     measure_metrics(p);
     p->cells = malloc(sizeof(EcTermCell) * (size_t)(p->cols * p->rows));
+    term_page_apply_theme(p); /* theme palette + defaults before first output */
 
     /* input controllers */
     GtkEventController* key = gtk_event_controller_key_new();

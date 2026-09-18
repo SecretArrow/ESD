@@ -58,6 +58,7 @@ void ui_pane_group_attach(EcApp* app, GtkWidget* container, EcTermPage* page);
 void ui_pane_group_dispose(EcApp* app, GtkWidget* container);
 void ui_split_pane(EcTermPage* page, bool vertical);
 void ui_close_pane(EcTermPage* page);
+void ui_close_tab_for_page(EcTermPage* page); /* close every pane in the tab */
 void ui_note_focus(EcTermPage* page);
 EcTermPage* ui_current_term_page(EcApp* app);
 
@@ -71,6 +72,9 @@ void ui_show_hostkey_dialog(EcApp* app, const EcServerKey* key, EcHostKeyStatus 
 void ui_show_error(EcApp* app, const char* title, const char* message);
 void ui_show_about(EcApp* app);
 void ui_prompt_password(EcApp* app, const char* title, void (*done)(const char* pass, void*), void* user);
+/* spec #13 paste confirmation: preview + explicit yes before cb runs */
+void ui_confirm_paste(EcApp* app, const char* text,
+                      void (*on_yes)(const char* text, void* user), void* user);
 
 /* settings.c */
 void ui_settings_page_build(EcApp* app);

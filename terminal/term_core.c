@@ -44,9 +44,14 @@ static int sb_pushline(int cols, const VTermScreenCell* cells, void* user)
     EcTermCell* line = calloc(cols > 0 ? (size_t)cols : 1u, sizeof(EcTermCell));
     if (!line) return 0;
     for (int i = 0; i < cols; i++) {
+        VTermColor fg = cells[i].fg, bg = cells[i].bg;
+        /* resolve indexed/default colors against the live palette+defaults so
+         * scrollback stores concrete RGB (convert resets all other flags) */
+        vterm_state_convert_color_to_rgb(t->st, &fg);
+        vterm_state_convert_color_to_rgb(t->st, &bg);
         line[i].ch = cells[i].chars[0];
-        line[i].fg_r = cells[i].fg.rgb.red; line[i].fg_g = cells[i].fg.rgb.green; line[i].fg_b = cells[i].fg.rgb.blue;
-        line[i].bg_r = cells[i].bg.rgb.red; line[i].bg_g = cells[i].bg.rgb.green; line[i].bg_b = cells[i].bg.rgb.blue;
+        line[i].fg_r = fg.rgb.red; line[i].fg_g = fg.rgb.green; line[i].fg_b = fg.rgb.blue;
+        line[i].bg_r = bg.rgb.red; line[i].bg_g = bg.rgb.green; line[i].bg_b = bg.rgb.blue;
         line[i].bold = cells[i].attrs.bold;
         line[i].italic = cells[i].attrs.italic;
         line[i].underline = cells[i].attrs.underline;
@@ -164,6 +169,7 @@ EcTerm* ec_term_new(int cols, int rows, int scrollback)
     if (!t->vs) { vterm_free(t->vt); free(t); return NULL; }
     t->write_cb = NULL;
     vterm_output_set_callback(t->vt, on_output, t);
+    t->st = vterm_obtain_state(t->vt);
     vterm_screen_set_callbacks(t->vs, &screen_cbs, t);
     vterm_screen_set_damage_merge(t->vs, VTERM_DAMAGE_SCROLL);
     vterm_screen_reset(t->vs, 1);
@@ -171,6 +177,9 @@ EcTerm* ec_term_new(int cols, int rows, int scrollback)
     t->sb = calloc((size_t)t->sb_cap, sizeof(EcTermCell*));
     t->grid = calloc((size_t)(cols * rows), sizeof(EcTermCell));
     default_palette(t->palette);
+    uint8_t df[3] = { 0xe6, 0xe8, 0xeb }, db[3] = { 0x14, 0x17, 0x1c };
+    ec_term_set_default_colors(t, df, db);
+    vterm_state_set_bold_highbright(t->st, 1); /* bold maps to bright palette */
     if (!t->sb || !t->grid) { ec_term_free(t); return NULL; }
     return t;
 }
@@ -237,6 +246,33 @@ void ec_term_resize(EcTerm* t, int cols, int rows)
     vterm_set_size(t->vt, rows, cols);
     vterm_screen_flush_damage(t->vs);
     t->resized = true;
+    t->dirty = true;
+}
+
+void ec_term_set_palette(EcTerm* t, const uint8_t pal[16][3])
+{
+    if (!t || !pal) return;
+    memcpy(t->palette, pal, sizeof t->palette);
+    if (!t->st) return;
+    for (int i = 0; i < 16; i++) {
+        VTermColor c;
+        vterm_color_rgb(&c, pal[i][0], pal[i][1], pal[i][2]);
+        vterm_state_set_palette_color(t->st, i, &c);
+    }
+    t->dirty = true;
+}
+
+void ec_term_set_default_colors(EcTerm* t, const uint8_t fg[3], const uint8_t bg[3])
+{
+    if (!t || !fg || !bg) return;
+    t->def_fg[0] = fg[0]; t->def_fg[1] = fg[1]; t->def_fg[2] = fg[2];
+    t->def_bg[0] = bg[0]; t->def_bg[1] = bg[1]; t->def_bg[2] = bg[2];
+    if (t->st) {
+        VTermColor cfg, cbg;
+        vterm_color_rgb(&cfg, fg[0], fg[1], fg[2]);
+        vterm_color_rgb(&cbg, bg[0], bg[1], bg[2]);
+        vterm_state_set_default_colors(t->st, &cfg, &cbg);
+    }
     t->dirty = true;
 }
 
@@ -315,8 +351,14 @@ bool ec_term_render(EcTerm* t, EcTermCell* out_grid, int cols, int rows)
                 vterm_screen_get_cell(t->vs, pos, &vcell);
                 memset(out, 0, sizeof *out);
                 out->ch = vcell.chars[0];
-                out->fg_r = vcell.fg.rgb.red; out->fg_g = vcell.fg.rgb.green; out->fg_b = vcell.fg.rgb.blue;
-                out->bg_r = vcell.bg.rgb.red; out->bg_g = vcell.bg.rgb.green; out->bg_b = vcell.bg.rgb.blue;
+                VTermColor fg = vcell.fg, bg = vcell.bg;
+                /* resolve palette-indexed and default SGR colors to concrete
+                 * RGB through the state palette (theme-aware); reading .rgb
+                 * of an INDEXED color is garbage - this was the old bug */
+                vterm_state_convert_color_to_rgb(t->st, &fg);
+                vterm_state_convert_color_to_rgb(t->st, &bg);
+                out->fg_r = fg.rgb.red; out->fg_g = fg.rgb.green; out->fg_b = fg.rgb.blue;
+                out->bg_r = bg.rgb.red; out->bg_g = bg.rgb.green; out->bg_b = bg.rgb.blue;
                 out->bold = vcell.attrs.bold;
                 out->italic = vcell.attrs.italic;
                 out->underline = vcell.attrs.underline;

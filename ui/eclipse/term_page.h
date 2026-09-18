@@ -39,6 +39,7 @@ struct EcTermPage {
     bool has_selection;
     /* mouse mode relay */
     bool term_mouse_mode;
+    bool scroll_sync;       /* guard while the scrollbar mirrors the term */
     guint resize_pending;
     int pending_cols, pending_rows;
 };
@@ -46,6 +47,11 @@ struct EcTermPage {
 GtkWidget* ui_term_page_tab_label(EcTermPage* page);
 void ui_term_page_paste_from_clipboard_pub(EcTermPage* page);
 const char* ui_term_page_title(EcTermPage* page);
+/* live theme / font re-apply (single page or every open page) */
+void ui_term_page_apply_theme(EcTermPage* page);
+void ui_term_page_apply_theme_all(EcApp* app);
+void ui_term_page_apply_font(EcTermPage* page);
+void ui_term_page_apply_font_all(EcApp* app);
 
 #ifdef __cplusplus
 }

@@ -88,6 +88,16 @@ bool ec_stat_exists(const char* path)
     return attrs != INVALID_FILE_ATTRIBUTES;
 }
 
+bool ec_stat_is_dir(const char* path)
+{
+    if (!path) return false;
+    wchar_t* w = utf8_to_wide(path);
+    if (!w) return false;
+    DWORD attrs = GetFileAttributesW(w);
+    free(w);
+    return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
 bool ec_stat_size(const char* path, uint64_t* out)
 {
     if (!path || !out) return false;

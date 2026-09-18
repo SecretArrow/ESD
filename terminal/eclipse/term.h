@@ -28,6 +28,7 @@ typedef void (*EcTermEventCb)(int event, const char* text, void* user);
 
 struct EcTerm {
     VTerm* vt;
+    VTermState* st;
     VTermScreen* vs;
     int cols, rows;
     EcTermWriteCb write_cb;
@@ -48,6 +49,8 @@ struct EcTerm {
     bool cursor_visible;
     bool bracketed_paste;    /* last known mode */
     uint8_t palette[16][3];
+    uint8_t def_fg[3];       /* theme default fg/bg fed into libvterm state */
+    uint8_t def_bg[3];
     EcStr pending_title;     /* OSC title fragment accumulator */
 };
 
@@ -61,6 +64,12 @@ void ec_term_input(EcTerm* t, const char* data, size_t len);
 void ec_term_key(EcTerm* t, const char* bytes, size_t len);
 void ec_term_paste(EcTerm* t, const char* text, size_t len);
 void ec_term_resize(EcTerm* t, int cols, int rows);
+/* apply a theme palette (16 ANSI entries) to the emulator: libvterm resolves
+ * indexed SGR colors through it; also mirrors into the readable snapshot */
+void ec_term_set_palette(EcTerm* t, const uint8_t pal[16][3]);
+/* theme default fg/bg (SGR 39/49): fed to libvterm state so default cells
+ * render with theme colors even after convert_color_to_rgb */
+void ec_term_set_default_colors(EcTerm* t, const uint8_t fg[3], const uint8_t bg[3]);
 /* scroll the view; positive = into history */
 void ec_term_scroll(EcTerm* t, int delta);
 void ec_term_scroll_to(EcTerm* t, int offset);

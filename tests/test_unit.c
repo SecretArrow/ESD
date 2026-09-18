@@ -11,6 +11,9 @@
 #include "eclipse/platform.h"
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 
 int tests_run = 0;
 
@@ -137,19 +140,72 @@ MU_TEST(test_theme)
 {
     EcTheme t;
     ec_theme_builtin_dark(&t);
-    mu_assert_string_eq("Dark", t.name);
+    mu_assert_string_eq("dark", t.name); /* name == settings key */
+    mu_assert_string_eq("#4f8cff", t.c.accent);
+    /* six built-ins resolve by key; ANSI palettes are populated */
+    size_t ndefs = 0;
+    const EcThemeDef* defs = ec_theme_builtins(&ndefs);
+    mu_check(ndefs == 6);
+    for (size_t i = 0; i < ndefs; i++) {
+        mu_check(ec_theme_builtin_by_name(defs[i].key, &t));
+        mu_assert_string_eq(defs[i].key, t.name);
+        mu_check(t.c.ansi[0][0] == '#' && strlen(t.c.ansi[15]) == 7);
+    }
+    /* key/label mapping round-trips */
+    mu_assert_string_eq("Nord", ec_theme_key_to_label("nord"));
+    mu_assert_string_eq("nord", ec_theme_label_to_key("Nord"));
+    mu_assert_string_eq("Dark", ec_theme_key_to_label("dark"));
+    /* unknown key falls back to dark and reports false */
+    mu_check(!ec_theme_builtin_by_name("no-such-theme", &t));
+    mu_assert_string_eq("dark", t.name);
+    /* parse helper */
+    uint8_t rgb[3];
+    mu_check(ec_theme_parse_hex("#4f8cff", rgb));
+    mu_check(rgb[0] == 0x4f && rgb[1] == 0x8c && rgb[2] == 0xff);
+    mu_check(!ec_theme_parse_hex("4f8cff", rgb));
+    mu_check(!ec_theme_parse_hex("#4f8c", rgb));
+    mu_check(!ec_theme_parse_hex(NULL, rgb));
     mu_check(ec_theme_load_json("{\"name\":\"Mine\",\"appearance\":\"light\","
                                 "\"colors\":{\"accent\":\"#00ff00\",\"radius\":\"6px\"}}", &t));
     mu_assert_string_eq("Mine", t.name);
     mu_assert_string_eq("light", t.appearance);
     mu_assert_string_eq("#00ff00", t.c.accent);
     mu_assert_string_eq("6px", t.c.radius);
+    /* custom ANSI overrides land per-index */
+    mu_check(ec_theme_load_json("{\"name\":\"A\",\"appearance\":\"dark\",\"colors\":"
+                                "{\"ansi\":[\"#010203\",\"#040506\"]}}", &t));
+    mu_assert_string_eq("#010203", t.c.ansi[0]);
+    mu_assert_string_eq("#040506", t.c.ansi[1]);
+    mu_assert_string_eq("#0dbc61", t.c.ansi[2]); /* untouched defaults */
     /* invalid color keeps default */
     mu_check(ec_theme_load_json("{\"appearance\":\"dark\",\"colors\":{\"accent\":\"zzz\"}}", &t));
     mu_check(t.c.accent[0] == '#' && strlen(t.c.accent) == 7);
     char* css = ec_theme_css(&t);
     mu_check(css && strstr(css, "background"));
     free(css);
+    /* save/load round-trip keeps the ANSI table */
+    char* dir = ec_file_tmpname("/tmp/ec-test-theme");
+    remove(dir);
+    mu_check(ec_mkdir_p(dir));
+    mu_check(ec_theme_builtin_by_name("dracula", &t));
+    char* tp = ec_path_join(dir, "dracula.json");
+    mu_check(ec_theme_save(&t, tp));
+    EcTheme t2;
+    mu_check(ec_theme_load_file(tp, &t2));
+    mu_assert_string_eq("#bd93f9", t2.c.primary);
+    mu_assert_string_eq(t.c.ansi[5], t2.c.ansi[5]);
+    /* resolve: builtin by key, custom file by name */
+    EcTheme t3;
+    mu_check(!ec_theme_resolve("nord", dir, &t3)); /* no custom file: builtin */
+    mu_assert_string_eq("#88c0d0", t3.c.primary);
+    mu_check(ec_theme_builtin_by_name("monokai", &t));
+    mu_check(ec_theme_save(&t, tp));
+    mu_check(ec_theme_resolve("monokai", dir, &t3)); /* custom file wins */
+    mu_assert_string_eq("#a6e22e", t3.c.primary);
+    mu_check(!ec_theme_resolve(NULL, dir, &t3));
+    remove(tp); /* best-effort cleanup; dir itself stays in /tmp */
+    free(tp);
+    free(dir);
 }
 
 MU_TEST(test_vault)

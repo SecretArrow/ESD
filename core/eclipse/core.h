@@ -64,6 +64,7 @@ bool ec_mkdir_p(const char* path);                        /* recursive, 0700 on 
 bool ec_file_read_all(const char* path, char** out, size_t* len_out); /* NUL-terminated */
 bool ec_file_write_atomic(const char* path, const char* data, size_t len); /* tmp+rename, 0600 */
 bool ec_file_exists(const char* path);
+bool ec_file_is_dir(const char* path);
 bool ec_file_size(const char* path, uint64_t* out);
 char* ec_file_tmpname(const char* prefix);                /* malloc'd */
 void ec_secure_wipe(void* p, size_t n);

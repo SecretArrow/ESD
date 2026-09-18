@@ -181,6 +181,25 @@ void ui_note_focus(EcTermPage* page)
     if (grp) grp->focused = page;
 }
 
+void ui_close_tab_for_page(EcTermPage* page)
+{
+    if (!page || !page->container) return;
+    PaneGroup* grp = group_of(page);
+    if (!grp) return;
+    /* snapshot first: closing panes mutates grp->pages; the anchor page goes
+     * last because closing the final pane removes the whole notebook tab */
+    EcVec snapshot;
+    ec_vec_init(&snapshot);
+    for (size_t i = 0; i < grp->pages.len; i++)
+        ec_vec_push(&snapshot, grp->pages.items[i]);
+    for (size_t i = 0; i < snapshot.len; i++) {
+        EcTermPage* p = snapshot.items[i];
+        if (p != page) ui_close_pane(p);
+    }
+    ui_close_pane(page);
+    ec_vec_free(&snapshot);
+}
+
 EcTermPage* ui_current_term_page(EcApp* app)
 {
     int cur = gtk_notebook_get_current_page(GTK_NOTEBOOK(app->notebook));
