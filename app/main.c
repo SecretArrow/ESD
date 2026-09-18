@@ -70,12 +70,16 @@ static void on_activate(GtkApplication* gtk_app, gpointer user)
     (void)whoami;
     app->gtk_app = gtk_app;
     app_dirs_init(app);
+    fprintf(stderr, "[smoke] dirs ok\n"); fflush(stderr);
     app_files_init(app);
+    fprintf(stderr, "[smoke] files ok\n"); fflush(stderr);
     theme_init(app);
+    fprintf(stderr, "[smoke] theme ok\n"); fflush(stderr);
 
     GtkWindow* win = GTK_WINDOW(gtk_application_window_new(gtk_app));
     app->main_window = win;
     ui_main_window_build(app);
+    fprintf(stderr, "[smoke] window built\n"); fflush(stderr);
 
     /* global accelerators (overridable via shortcuts.json later) */
     const char* accels_new[] = { "<Ctrl>n", NULL };
@@ -103,7 +107,9 @@ static void action_palette(GSimpleAction* a, GVariant* v, gpointer user)
 
 int main(int argc, char** argv)
 {
+    fprintf(stderr, "[smoke] main enter\n"); fflush(stderr);
     adw_init(); /* libadwaita dialogs (GtkDialog family is deprecated) */
+    fprintf(stderr, "[smoke] adw_init done\n"); fflush(stderr);
     /* ssh:// deep links: eclipse-ssh ssh://user@host:port (spec #53) */
     for (int i = 1; i < argc; i++) {
         if (g_str_has_prefix(argv[i], "ssh://")) {
@@ -113,7 +119,9 @@ int main(int argc, char** argv)
         }
     }
     memset(&g_app, 0, sizeof g_app);
+    fprintf(stderr, "[smoke] creating GtkApplication\n"); fflush(stderr);
     GtkApplication* gtk_app = gtk_application_new("io.github.SecretArrow.EclipseSSH", G_APPLICATION_NON_UNIQUE);
+    fprintf(stderr, "[smoke] GtkApplication created\n"); fflush(stderr);
     static const GActionEntry actions[] = {
         { "new-session", action_new_session, NULL, NULL, NULL },
         { "palette", action_palette, NULL, NULL, NULL },

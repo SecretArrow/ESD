@@ -1547,7 +1547,9 @@ void ui_main_window_build(EcApp* app)
     g_signal_connect(app->notebook, "page-removed", G_CALLBACK(notebook_page_removed), app);
 
     /* other pages */
+    fprintf(stderr, "[smoke] ui: sftp page begin\n"); fflush(stderr);
     ui_sftp_page_build(app);
+    fprintf(stderr, "[smoke] ui: settings page begin\n"); fflush(stderr);
     ui_settings_page_build(app);
 
     /* --- status bar --- */
@@ -1563,5 +1565,6 @@ void ui_main_window_build(EcApp* app)
     gtk_box_append(GTK_BOX(root), status);
 
     ui_sidebar_refresh(app);
+    fprintf(stderr, "[smoke] ui: applying theme\n"); fflush(stderr);
     ui_apply_theme(app);
 }

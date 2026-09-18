@@ -135,7 +135,7 @@ jobs:
           objdump -p build/ci/eclipse-ssh.exe | grep "DLL Name" || true
           echo "--- ldd resolution (non-system) ---"
           ldd ./build/ci/eclipse-ssh.exe 2>&1 | grep -iv "windows\\\\system32\|system32" || true
-          ECLIPSE_HEADLESS=1 timeout -k 2 40 ./build/ci/eclipse-ssh > /tmp/smoke-win.log 2>&1
+          ECLIPSE_HEADLESS=1 GDK_DISABLE=media GSK_RENDERER=cairo timeout -k 2 40 ./build/ci/eclipse-ssh > /tmp/smoke-win.log 2>&1
           RC=$?
           set -e
           echo "smoke exit: $RC (124=timeout-kill, expected)"
