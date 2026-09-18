@@ -755,7 +755,7 @@ static void local_list(const char* dir, GtkWidget* view)
         e.path = g_strdup(parent);
         e.is_dir = true;
         e.is_parent = true;
-        ec_vec_push(&rows, e);
+        ec_vec_push(&rows, &e);
     }
     free(parent);
     EcDirIter* it = NULL;
@@ -775,7 +775,7 @@ static void local_list(const char* dir, GtkWidget* view)
             free(name);
             uint64_t sz = 0;
             if (!isdir && full && ec_file_size(full, &sz)) e.size = sz;
-            ec_vec_push(&rows, e);
+            ec_vec_push(&rows, &e);
         }
         ec_dir_iter_close(it);
     }
@@ -808,7 +808,7 @@ static gboolean sftp_refresh_idle(gpointer user)
             e.path = g_strdup(parent);
             e.is_dir = true;
             e.is_parent = true;
-            ec_vec_push(&rows, e);
+            ec_vec_push(&rows, &e);
         }
         free(parent);
         if (entries) {
@@ -820,7 +820,7 @@ static gboolean sftp_refresh_idle(gpointer user)
                 e.name = g_strdup_printf(e.is_dir ? "%s/" : "%s", nm);
                 e.path = ec_path_join(pg->remote_cwd, nm);
                 e.size = entries[i].size;
-                ec_vec_push(&rows, e);
+                ec_vec_push(&rows, &e);
             }
             ec_sftp_entries_free(entries, n);
         }
