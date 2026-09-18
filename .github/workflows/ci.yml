@@ -130,6 +130,11 @@ jobs:
       - name: GUI smoke (real desktop)
         run: |
           set +e
+          ls -la build/ci/eclipse-ssh.exe
+          echo "--- imported DLLs ---"
+          objdump -p build/ci/eclipse-ssh.exe | grep "DLL Name" || true
+          echo "--- ldd resolution (non-system) ---"
+          ldd ./build/ci/eclipse-ssh.exe 2>&1 | grep -iv "windows\\\\system32\|system32" || true
           ECLIPSE_HEADLESS=1 timeout -k 2 40 ./build/ci/eclipse-ssh > /tmp/smoke-win.log 2>&1
           RC=$?
           set -e
