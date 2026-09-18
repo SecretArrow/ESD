@@ -688,8 +688,11 @@ typedef struct {
 
 static int row_cmp(const void* a, const void* b)
 {
-    const SftpRowEnt* x = a;
-    const SftpRowEnt* y = b;
+    /* qsort over EcVec of SftpRowEnt* : args are pointer-to-element */
+    const SftpRowEnt* const* pa = a;
+    const SftpRowEnt* const* pb = b;
+    const SftpRowEnt* x = *pa;
+    const SftpRowEnt* y = *pb;
     if (x->is_parent != y->is_parent) return x->is_parent ? -1 : 1;
     if (x->is_dir != y->is_dir) return x->is_dir ? -1 : 1;
     const char* s1 = x->name;
@@ -701,6 +704,28 @@ static int row_cmp(const void* a, const void* b)
         s1++; s2++;
     }
     return (unsigned char)*s1 - (unsigned char)*s2;
+}
+
+/* heap-allocate one row entry (the vec stores pointers; stack copies would
+ * dangle) */
+static void push_row(EcVec* rows, const char* name, const char* path,
+                     bool is_dir, bool is_parent, uint64_t size)
+{
+    SftpRowEnt* e = g_new0(SftpRowEnt, 1);
+    e->name = g_strdup(name);
+    e->path = g_strdup(path);
+    e->is_dir = is_dir;
+    e->is_parent = is_parent;
+    e->size = size;
+    ec_vec_push(rows, e);
+}
+
+static void free_row(SftpRowEnt* e)
+{
+    if (!e) return;
+    g_free(e->name);
+    g_free(e->path);
+    g_free(e);
 }
 
 static GtkWidget* sftp_row_new(const SftpRowEnt* e)
@@ -749,14 +774,8 @@ static void local_list(const char* dir, GtkWidget* view)
     ec_vec_init(&rows);
     /* parent navigation */
     char* parent = ec_path_dirname(dir);
-    if (parent && strcmp(parent, dir) != 0) {
-        SftpRowEnt e = { 0 };
-        e.name = g_strdup("..");
-        e.path = g_strdup(parent);
-        e.is_dir = true;
-        e.is_parent = true;
-        ec_vec_push(&rows, &e);
-    }
+    if (parent && strcmp(parent, dir) != 0)
+        push_row(&rows, "..", parent, true, true, 0);
     free(parent);
     EcDirIter* it = NULL;
     if (ec_dir_iter_open(&it, dir)) {
@@ -765,28 +784,22 @@ static void local_list(const char* dir, GtkWidget* view)
             if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) { free(name); continue; }
             char* full = ec_path_join(dir, name);
             bool isdir = full && ec_file_is_dir(full);
-            SftpRowEnt e = { 0 };
-            e.path = full;
-            e.is_dir = isdir;
-            if (isdir)
-                e.name = g_strdup_printf("%s/", name);
-            else
-                e.name = g_strdup(name);
-            free(name);
+            char* disp = isdir ? g_strdup_printf("%s/", name) : g_strdup(name);
             uint64_t sz = 0;
-            if (!isdir && full && ec_file_size(full, &sz)) e.size = sz;
-            ec_vec_push(&rows, &e);
+            if (!isdir && full) (void)ec_file_size(full, &sz);
+            push_row(&rows, disp, full, isdir, false, sz);
+            g_free(disp);
+            free(full);
+            free(name);
         }
         ec_dir_iter_close(it);
     }
     if (rows.len > 1)
-        qsort(rows.items, rows.len, sizeof(SftpRowEnt), row_cmp);
-    for (size_t i = 0; i < rows.len; i++) {
-        SftpRowEnt* e = &((SftpRowEnt*)rows.items)[i];
-        gtk_list_box_append(list, sftp_row_new(e));
-        g_free(e->name);
-        free(e->path);
-    }
+        qsort(rows.items, rows.len, sizeof(SftpRowEnt*), row_cmp);
+    for (size_t i = 0; i < rows.len; i++)
+        gtk_list_box_append(list, sftp_row_new(rows.items[i]));
+    for (size_t i = 0; i < rows.len; i++)
+        free_row(rows.items[i]);
     ec_vec_free(&rows);
 }
 
@@ -802,36 +815,27 @@ static gboolean sftp_refresh_idle(gpointer user)
         EcVec rows;
         ec_vec_init(&rows);
         char* parent = ec_path_dirname(pg->remote_cwd);
-        if (parent && strcmp(parent, pg->remote_cwd) != 0) {
-            SftpRowEnt e = { 0 };
-            e.name = g_strdup("..");
-            e.path = g_strdup(parent);
-            e.is_dir = true;
-            e.is_parent = true;
-            ec_vec_push(&rows, &e);
-        }
+        if (parent && strcmp(parent, pg->remote_cwd) != 0)
+            push_row(&rows, "..", parent, true, true, 0);
         free(parent);
         if (entries) {
             for (size_t i = 0; i < n; i++) {
-                SftpRowEnt e = { 0 };
                 const char* nm = entries[i].name ? entries[i].name : "?";
                 if (strcmp(nm, ".") == 0 || strcmp(nm, "..") == 0) continue;
-                e.is_dir = entries[i].is_dir;
-                e.name = g_strdup_printf(e.is_dir ? "%s/" : "%s", nm);
-                e.path = ec_path_join(pg->remote_cwd, nm);
-                e.size = entries[i].size;
-                ec_vec_push(&rows, &e);
+                char* path = ec_path_join(pg->remote_cwd, nm);
+                char* disp = g_strdup_printf(entries[i].is_dir ? "%s/" : "%s", nm);
+                push_row(&rows, disp, path, entries[i].is_dir, false, entries[i].size);
+                g_free(disp);
+                free(path);
             }
             ec_sftp_entries_free(entries, n);
         }
         if (rows.len > 1)
-            qsort(rows.items, rows.len, sizeof(SftpRowEnt), row_cmp);
-        for (size_t i = 0; i < rows.len; i++) {
-            SftpRowEnt* e = &((SftpRowEnt*)rows.items)[i];
-            gtk_list_box_append(list, sftp_row_new(e));
-            g_free(e->name);
-            free(e->path);
-        }
+            qsort(rows.items, rows.len, sizeof(SftpRowEnt*), row_cmp);
+        for (size_t i = 0; i < rows.len; i++)
+            gtk_list_box_append(list, sftp_row_new(rows.items[i]));
+        for (size_t i = 0; i < rows.len; i++)
+            free_row(rows.items[i]);
         ec_vec_free(&rows);
         free(err);
     }
